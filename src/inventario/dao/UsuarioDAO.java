@@ -74,7 +74,7 @@ public class UsuarioDAO {
             return true;
 
         } catch (Exception e) {
-            System.out.println("❌ Error al actualizar usuario");
+            System.out.println("Error al actualizar usuario");
             e.printStackTrace();
             return false;
         }
@@ -105,4 +105,33 @@ public class UsuarioDAO {
         }
         return u;
     }
+
+    public Usuario login(String username, String password) {
+        String sql = "SELECT * FROM Usuario WHERE username=? AND password=?";
+        Usuario u = null;
+
+        try (Connection con = ConexionBD.getConexion();
+            PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, username);
+            ps.setString(2, password);
+
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+                u = new Usuario();
+                u.setIdUsuario(rs.getInt("idUsuario"));
+                u.setNombreCompleto(rs.getString("nombreCompleto"));
+                u.setUsername(rs.getString("username"));
+                u.setPassword(rs.getString("password"));
+                u.setRol(rs.getString("rol"));
+            }
+
+        } catch (Exception e) {
+            System.out.println("Error en login");
+            e.printStackTrace();
+        }
+        return u;
+    }
+
 }

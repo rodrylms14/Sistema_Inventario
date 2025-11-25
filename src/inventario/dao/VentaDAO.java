@@ -64,6 +64,29 @@ public class VentaDAO {
         }
     }
 
+    public boolean eliminarDetalle(int idDetalle) {
+        String sql = "DELETE FROM DetalleVenta WHERE idDetalle=?";
+
+        try (Connection con = ConexionBD.getConexion();
+            PreparedStatement ps = con.prepareStatement(sql)) {
+
+            System.out.println("Intentando borrar idDetalle = " + idDetalle);
+            ps.setInt(1, idDetalle);
+
+            int filas = ps.executeUpdate();
+            System.out.println("Filas afectadas = " + filas);
+
+            return filas > 0;
+
+        } catch (Exception e) {
+            System.out.println(" Error al eliminar detalle");
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
+
     public Venta obtenerVenta(int idVenta) {
         String sql = "SELECT * FROM Venta WHERE idVenta=?";
         Venta v = null;
@@ -101,4 +124,78 @@ public class VentaDAO {
 
         return v;
     }
+
+   public boolean cancelarVenta(int idVenta) {
+        String selectDetalles = "SELECT idDetalle FROM DetalleVenta WHERE idVenta=?";
+        String deleteDetalle = "DELETE FROM DetalleVenta WHERE idDetalle=?";
+        String deleteVenta = "DELETE FROM Venta WHERE idVenta=?";
+
+        try (Connection con = ConexionBD.getConexion()) {
+
+            // 1) Obtener los idDetalle
+            PreparedStatement psSel = con.prepareStatement(selectDetalles);
+            psSel.setInt(1, idVenta);
+            ResultSet rs = psSel.executeQuery();
+
+            // 2) Borrarlos uno por uno
+            while (rs.next()) {
+                int idDet = rs.getInt("idDetalle");
+                PreparedStatement psDelDet = con.prepareStatement(deleteDetalle);
+                psDelDet.setInt(1, idDet);
+                psDelDet.executeUpdate();  // ✔ dispara trigger
+            }
+
+            // 3) Borrar la venta
+            PreparedStatement psVenta = con.prepareStatement(deleteVenta);
+            psVenta.setInt(1, idVenta);
+            psVenta.executeUpdate();
+
+            return true;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
+    public boolean actualizarCantidadDetalle(int idDetalle, int nuevaCantidad) {
+        String sqlSelect = "SELECT precioUnitario FROM DetalleVenta WHERE idDetalle=?";
+        String sqlUpdate = "UPDATE DetalleVenta SET cantidad=?, subtotal=? WHERE idDetalle=?";
+
+        try (Connection con = ConexionBD.getConexion();
+            PreparedStatement psSel = con.prepareStatement(sqlSelect)) {
+
+            // 1) Obtener el precioUnitario actual del detalle
+            psSel.setInt(1, idDetalle);
+            ResultSet rs = psSel.executeQuery();
+
+            if (!rs.next()) {
+                System.out.println("No se encontró el detalle con idDetalle = " + idDetalle);
+                return false;
+            }
+
+            double precioUnitario = rs.getDouble("precioUnitario");
+            double nuevoSubtotal = precioUnitario * nuevaCantidad;
+
+            // 2) Actualizar cantidad y subtotal
+            try (PreparedStatement psUpd = con.prepareStatement(sqlUpdate)) {
+                psUpd.setInt(1, nuevaCantidad);
+                psUpd.setDouble(2, nuevoSubtotal);
+                psUpd.setInt(3, idDetalle);
+
+                int filas = psUpd.executeUpdate();
+                System.out.println("Filas actualizadas (detalle): " + filas);
+                return filas > 0;
+            }
+
+        } catch (Exception e) {
+            System.out.println(" Error al actualizar cantidad del detalle");
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
+
 }

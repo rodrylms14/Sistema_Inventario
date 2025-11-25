@@ -1,6 +1,8 @@
 package inventario;
 
+
 import inventario.dao.ClienteDAO;
+import inventario.dao.DetalleVentaDAO;
 import inventario.dao.ProductoDAO;
 import inventario.dao.VentaDAO;
 import inventario.modelo.Cliente;
@@ -18,6 +20,7 @@ public class Main {
         ProductoDAO pdao = new ProductoDAO();
         ClienteDAO cdao = new ClienteDAO();
         VentaDAO vdao = new VentaDAO();
+        DetalleVentaDAO ddao = new DetalleVentaDAO();
 
         System.out.println("=== NUEVA VENTA ===");
 
@@ -31,8 +34,8 @@ public class Main {
         int idCli = Integer.parseInt(sc.nextLine());
         Integer idCliente = (idCli == 0) ? null : idCli;
 
-        // 2) Definir usuario que atiende (por ahora, fijo en 1)
-        int idUsuario = 1; // más adelante lo tomaremos del login
+        // 2) Usuario que atiende (por ahora fijo)
+        int idUsuario = 1;
 
         // 3) Tipo de servicio
         System.out.print("Tipo de servicio (1=BARRA, 2=SALON): ");
@@ -94,7 +97,75 @@ public class Main {
             }
         }
 
-        // 6) Consultar la venta final (total + servicio)
+        // 6) Mostrar carrito (detalles) antes de confirmar
+    boolean gestionCarrito = true;
+
+    while (gestionCarrito) {
+        System.out.println("\n=== CARRITO DE LA VENTA " + idVenta + " ===");
+        List<DetalleVenta> detalles = ddao.listarPorVenta(idVenta);
+        for (DetalleVenta det : detalles) {
+            Producto prodDet = pdao.buscarPorId(det.getIdProducto());
+            System.out.println(det.getIdDetalle() + " | " + prodDet.getNombreProducto() +
+                    " | Cant: " + det.getCantidad() +
+                    " | Subtotal: " + det.getSubTotal());
+        }
+
+        Venta ventaActual = vdao.obtenerVenta(idVenta);
+        double totalConImpuesto = ventaActual.getTotal() + ventaActual.getImpServicio();
+
+        System.out.println("\nTotal: " + ventaActual.getTotal());
+        System.out.println("Impuesto servicio: " + ventaActual.getImpServicio());
+        System.out.println("TOTAL A PAGAR: " + totalConImpuesto);
+
+        System.out.println("\nOpciones:");
+        System.out.println("1. Eliminar ítem del carrito");
+        System.out.println("2. Modificar cantidad de un ítem");
+        System.out.println("2. Confirmar venta");
+        System.out.println("3. Cancelar venta");
+
+        System.out.print("Seleccione opción: ");
+        int op = Integer.parseInt(sc.nextLine());
+
+        if (op == 1) {
+        System.out.print("Ingrese idDetalle a eliminar: ");
+        int idDet = Integer.parseInt(sc.nextLine());
+
+        boolean eliminado = vdao.eliminarDetalle(idDet);
+        if (eliminado) {
+            System.out.println(" Ítem eliminado (stock revertido).");
+        } else {
+            System.out.println(" No se pudo eliminar el ítem.");
+        }
+
+        } else if (op == 2) {
+        System.out.print("Ingrese idDetalle a modificar: ");
+        int idDet = Integer.parseInt(sc.nextLine());
+
+        System.out.print("Ingrese nueva cantidad: ");
+        int nuevaCant = Integer.parseInt(sc.nextLine());
+
+        boolean actualizado = vdao.actualizarCantidadDetalle(idDet, nuevaCant);
+        if (actualizado) {
+            System.out.println(" Cantidad actualizada.");
+        } else {
+            System.out.println(" No se pudo actualizar la cantidad.");
+        }
+
+        } else if (op == 3) {
+        System.out.println(" Venta confirmada.");
+        gestionCarrito = false;
+
+        } else if (op == 4) {
+        boolean cancelada = vdao.cancelarVenta(idVenta);
+        if (cancelada) {
+            System.out.println("Venta cancelada por usuario.");
+        }
+        gestionCarrito = false;
+        }
+    }
+
+
+        // 7) Consultar la venta final (total + servicio)
         Venta ventaFinal = vdao.obtenerVenta(idVenta);
         if (ventaFinal != null) {
             double totalPagar = ventaFinal.getTotal() + ventaFinal.getImpServicio();
@@ -103,10 +174,9 @@ public class Main {
             System.out.println("ID Venta: " + ventaFinal.getIdVenta());
             System.out.println("Tipo servicio: " + ventaFinal.getTipoServicio());
             System.out.println("Total sin servicio: " + ventaFinal.getTotal());
-            System.out.println("Impuesto servicio (10% si es SALON): " + ventaFinal.getImpServicio());
+            System.out.println("Impuesto servicio: " + ventaFinal.getImpServicio());
             System.out.println("TOTAL A PAGAR: " + totalPagar);
         }
 
-        sc.close();
     }
 }
