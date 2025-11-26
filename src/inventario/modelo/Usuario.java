@@ -52,4 +52,9 @@ public class Usuario {
         rol = rolNuevo;
     }
 
+    @Override
+    public String toString() {
+        return nombreCompleto + "(" + rol + ")";
+    }
+
 }

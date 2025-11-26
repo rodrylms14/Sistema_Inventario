@@ -32,12 +32,14 @@ public class VentanaVenta extends JFrame {
     private int idVenta = -1;
     private Usuario usuario;
     private int idUsuarioLogueado;
+    public boolean esAdmin;
 
     private ProductoDAO productoDAO = new ProductoDAO();
 
     public VentanaVenta(Usuario usuario) {
         this.usuario = usuario;
         this.idUsuarioLogueado = usuario.getIdUsuario();
+        this.esAdmin = "ADMIN".equalsIgnoreCase(usuario.getRol());  // ⬅️ AQUÍ
 
         setTitle("MiTienda POS - Venta | Usuario: " + usuario.getNombreCompleto() +
                 " (" + usuario.getRol() + ")");
@@ -47,9 +49,10 @@ public class VentanaVenta extends JFrame {
         setLocationRelativeTo(null);
 
         initComponents();
+        configurarPermisosPorRol();
+        crearMenuAdmin();            
         cargarProductos();
     }
-
 
     private void initComponents() {
         setLayout(new BorderLayout());
@@ -127,7 +130,7 @@ public class VentanaVenta extends JFrame {
         add(panelInferior, BorderLayout.SOUTH);
     }
 
-    private void cargarProductos() {
+    public void cargarProductos() {
         modeloProductos.setRowCount(0); // limpiar
 
         List<Producto> productos = productoDAO.listarProductos();
@@ -361,5 +364,47 @@ public class VentanaVenta extends JFrame {
             JOptionPane.showMessageDialog(this, " No se pudo cancelar la venta.");
         }
     }
+
+    private void configurarPermisosPorRol() {
+    if (!esAdmin) {
+        // Si NO es admin (es cajero):
+        // aquí decides qué limitar.
+
+        // Por ejemplo, podrías permitir todo menos cancelar venta completa:
+        // btnCancelar.setEnabled(false);
+        // btnCancelar.setToolTipText("Solo ADMIN puede cancelar la venta completa.");
+    } else {
+        // Es ADMIN: todo habilitado
+        btnCancelar.setEnabled(true);
+    }
+    }
+
+
+
+    private void crearMenuAdmin() {
+        if (!esAdmin) return;
+
+        JMenuBar bar = new JMenuBar();
+        JMenu menuAdmin = new JMenu("Admin");
+        JMenuItem itemProductos = new JMenuItem("Gestión de productos");
+        JMenuItem itemVentasDia = new JMenuItem("Reporte de ventas del día");
+
+        itemVentasDia.addActionListener(e -> {
+            ReporteVentasFrame r = new ReporteVentasFrame();
+            r.setVisible(true);
+        });
+
+        menuAdmin.add(itemVentasDia);
+
+        itemProductos.addActionListener(e -> {
+            GestionProductosFrame frame = new GestionProductosFrame();
+            frame.setVisible(true);
+        });
+
+        menuAdmin.add(itemProductos);
+        bar.add(menuAdmin);
+        setJMenuBar(bar);
+    }
+
 
 }

@@ -72,9 +72,16 @@ public class LoginFrame extends JFrame {
         }
 
         JOptionPane.showMessageDialog(this, "Bienvenido, " + u.getNombreCompleto() + "!");
-        // Abrir la ventana de venta con el usuario logueado
-        VentanaVenta vv = new VentanaVenta(u);
-        vv.setVisible(true);
+
         this.dispose(); // cerrar login
+
+        if (u.getRol().equalsIgnoreCase("ADMIN")) {
+            PanelAdmin pa = new PanelAdmin(u);
+            pa.setVisible(true);
+        } else {
+            VentanaVenta vv = new VentanaVenta(u);
+            vv.setVisible(true);
+        }
     }
+
 }

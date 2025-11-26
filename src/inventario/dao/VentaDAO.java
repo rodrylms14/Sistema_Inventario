@@ -4,6 +4,8 @@ import inventario.modelo.DetalleVenta;
 import inventario.modelo.Venta;
 import inventario.util.ConexionBD;
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class VentaDAO {
 
@@ -195,6 +197,70 @@ public class VentaDAO {
             return false;
         }
     }
+
+    public List<Venta> listarVentasDelDia() {
+        List<Venta> lista = new ArrayList<>();
+        String sql = "SELECT * FROM Venta WHERE DATE(fechaHora) = CURDATE()";
+
+        try (Connection con = ConexionBD.getConexion();
+            PreparedStatement ps = con.prepareStatement(sql);
+            ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                Venta v = new Venta();
+                v.setIdVenta(rs.getInt("idVenta"));
+                v.setIdCliente(rs.getInt("idCliente"));
+                v.setIdUsuario(rs.getInt("idUsuario"));
+                v.setTipoServicio(rs.getString("tipoServicio"));
+                v.setTotal(rs.getDouble("total"));
+                v.setImpServicio(rs.getDouble("impuestoServicio"));
+                Timestamp ts = rs.getTimestamp("fechaHora");
+                if (ts != null) {
+                    v.setFechaHora(ts.toLocalDateTime());
+                }
+
+                lista.add(v);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return lista;
+    }
+
+    public List<Venta> listarVentasPorUsuario(int idUsuario) {
+        List<Venta> lista = new ArrayList<>();
+        String sql = "SELECT * FROM Venta WHERE idUsuario = ?";
+
+        try (Connection con = ConexionBD.getConexion();
+            PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setInt(1, idUsuario);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Venta v = new Venta();
+                    v.setIdVenta(rs.getInt("idVenta"));
+                    v.setTotal(rs.getDouble("total"));
+                    v.setImpServicio(rs.getDouble("impuestoServicio"));
+
+                    // fechaHora es LocalDateTime en tu modelo
+                    java.sql.Timestamp ts = rs.getTimestamp("fechaHora");
+                    if (ts != null) {
+                        v.setFechaHora(ts.toLocalDateTime());
+                    }
+
+                    v.setIdUsuario(rs.getInt("idUsuario"));
+                    lista.add(v);
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return lista;
+    }
+
+
 
 
 
