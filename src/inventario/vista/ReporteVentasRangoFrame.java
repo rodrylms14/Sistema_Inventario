@@ -4,20 +4,21 @@ import inventario.dao.VentaDAO;
 import inventario.modelo.Venta;
 import java.awt.*;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.List;
-import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
-import com.toedter.calendar.JDateChooser;
-import java.util.Date;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
+import java.util.List;
+import javax.swing.*; // <-- Necesario para el modelo de JSpinner
+import javax.swing.JSpinner.DateEditor; // <-- Necesario para convertir Date a LocalDate
+import javax.swing.table.DefaultTableModel; // <-- Necesario para dar formato al JSpinner
 
 
 public class ReporteVentasRangoFrame extends JFrame {
 
-    private JDateChooser txtDesde;
-    private JDateChooser txtHasta;
+    // CAMBIADAS: De JTextField a JSpinner
+    private JSpinner spDesde;
+    private JSpinner spHasta;
+    
     private JTable tabla;
     private DefaultTableModel modelo;
     private JLabel lblTotal;
@@ -25,7 +26,8 @@ public class ReporteVentasRangoFrame extends JFrame {
 
     private VentaDAO ventaDAO = new VentaDAO();
     private DateTimeFormatter fmtTabla = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private DateTimeFormatter fmtEntrada = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    // fmtEntrada ya no es estrictamente necesario, pero se mantiene si se necesita.
+    // private DateTimeFormatter fmtEntrada = DateTimeFormatter.ofPattern("yyyy-MM-dd"); 
 
     public ReporteVentasRangoFrame() {
         setTitle("Reporte de ventas por rango de fechas");
@@ -43,16 +45,25 @@ public class ReporteVentasRangoFrame extends JFrame {
         JPanel panelFiltros = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
         panelFiltros.add(new JLabel("Desde:"));
-        txtDesde = new JDateChooser(); // Inicializar el JDateChooser
-        txtDesde.setDateFormatString("yyyy-MM-dd"); // Formato visible
-        txtDesde.setPreferredSize(new Dimension(100, 25)); // Para que se vea bien en FlowLayout
-        panelFiltros.add(txtDesde);
+        
+        // 1. CREACIÓN DEL PRIMER JSpinner
+        SpinnerDateModel smDesde = new SpinnerDateModel(new Date(), null, null, java.util.Calendar.DAY_OF_MONTH);
+        spDesde = new JSpinner(smDesde);
+        // Formato para que solo muestre la fecha (yyyy-MM-dd)
+        DateEditor deDesde = new JSpinner.DateEditor(spDesde, "yyyy-MM-dd");
+        spDesde.setEditor(deDesde);
+        spDesde.setPreferredSize(new Dimension(100, 25)); 
+        panelFiltros.add(spDesde);
 
         panelFiltros.add(new JLabel("Hasta:"));
-        txtHasta = new JDateChooser(); // Inicializar el JDateChooser
-        txtHasta.setDateFormatString("yyyy-MM-dd");
-        txtHasta.setPreferredSize(new Dimension(100, 25));
-        panelFiltros.add(txtHasta);
+        
+        // 2. CREACIÓN DEL SEGUNDO JSpinner
+        SpinnerDateModel smHasta = new SpinnerDateModel(new Date(), null, null, java.util.Calendar.DAY_OF_MONTH);
+        spHasta = new JSpinner(smHasta);
+        DateEditor deHasta = new JSpinner.DateEditor(spHasta, "yyyy-MM-dd");
+        spHasta.setEditor(deHasta);
+        spHasta.setPreferredSize(new Dimension(100, 25));
+        panelFiltros.add(spHasta);
 
         JButton btnBuscar = new JButton("Buscar");
         btnBuscar.addActionListener(e -> buscar());
@@ -86,31 +97,25 @@ public class ReporteVentasRangoFrame extends JFrame {
     }
 
     private void buscar() {
-        // 1. Obtener la fecha de tipo java.util.Date
-        Date dateDesde = txtDesde.getDate();
-        Date dateHasta = txtHasta.getDate();
+        // 1. Obtener la fecha de tipo java.util.Date directamente del JSpinner
+        Date dateDesde = (Date) spDesde.getValue();
+        Date dateHasta = (Date) spHasta.getValue();
 
-        // 2. Manejo de campos vacíos/nulos
-        if (dateDesde == null || dateHasta == null) {
-            JOptionPane.showMessageDialog(this, "Seleccione ambas fechas usando el calendario.");
-            return;
-        }
-
+        // 2. Validación (el JSpinner siempre tiene un valor Date, así que la validación es opcional)
+        // Aunque la validación de nulos no es necesaria, mantenemos la lógica de conversión:
+        
         // 3. Convertir java.util.Date a java.time.LocalDate para la lógica de negocios
         LocalDate desde = dateDesde.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         LocalDate hasta = dateHasta.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
 
-        // 4. (Opcional, eliminar el bloque try/catch de parseo de fecha)
-        // El JDateChooser ya garantiza el formato correcto, por lo que el bloque try/catch
-        // de parseo de fecha (que usaba fmtEntrada) ya no es necesario aquí,
-        // pero la verificación isBefore() sigue siendo útil.
+        // Eliminamos el bloque try-catch de parseo de String, ya que la fecha siempre es válida.
 
         if (hasta.isBefore(desde)) {
             JOptionPane.showMessageDialog(this, "La fecha 'hasta' no puede ser menor que 'desde'.");
             return;
         }
 
-                List<Venta> ventas = ventaDAO.listarVentasPorRango(desde, hasta);
+        List<Venta> ventas = ventaDAO.listarVentasPorRango(desde, hasta);
 
         modelo.setRowCount(0);
         double total = 0;
