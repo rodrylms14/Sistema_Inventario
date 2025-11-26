@@ -1,8 +1,8 @@
 package inventario.vista;
 
 import inventario.modelo.Usuario;
-import javax.swing.*;
 import java.awt.*;
+import javax.swing.*;
 
 public class PanelAdmin extends JFrame {
 
@@ -22,7 +22,7 @@ public class PanelAdmin extends JFrame {
     private void initUI() {
 
         JPanel panel = new JPanel();
-        panel.setLayout(new GridLayout(4, 1, 10, 10));
+        panel.setLayout(new GridLayout(5, 1, 10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(25, 50, 25, 50));
 
         JLabel titulo = new JLabel("PANEL DEL ADMINISTRADOR", SwingConstants.CENTER);
@@ -38,7 +38,7 @@ public class PanelAdmin extends JFrame {
         JButton btnReporteVentas = new JButton("📊 Reporte de ventas");
         btnReporteVentas.setFont(new Font("Segoe UI", Font.PLAIN, 16));
         btnReporteVentas.addActionListener(e -> {
-            ReporteVentasFrame r = new ReporteVentasFrame();
+            ReporteVentasRangoFrame r = new ReporteVentasRangoFrame();
             r.setVisible(true);
         });
 
@@ -54,6 +54,15 @@ public class PanelAdmin extends JFrame {
             r.setVisible(true);
         });
         panel.add(btnReporteUsuario);
+
+        JButton btnVentasRango = new JButton("📅 Ventas por rango de fechas");
+        btnVentasRango.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        btnVentasRango.addActionListener(e -> {
+            ReporteVentasRangoFrame r = new ReporteVentasRangoFrame();
+            r.setVisible(true);
+        });
+        panel.add(btnVentasRango);
+
 
         JButton btnCerrar = new JButton("🚪 Cerrar sesión");
         btnCerrar.setFont(new Font("Segoe UI", Font.PLAIN, 16));

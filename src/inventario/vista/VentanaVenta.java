@@ -390,7 +390,7 @@ public class VentanaVenta extends JFrame {
         JMenuItem itemVentasDia = new JMenuItem("Reporte de ventas del día");
 
         itemVentasDia.addActionListener(e -> {
-            ReporteVentasFrame r = new ReporteVentasFrame();
+            ReporteVentasRangoFrame r = new ReporteVentasRangoFrame();
             r.setVisible(true);
         });
 

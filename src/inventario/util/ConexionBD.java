@@ -18,10 +18,10 @@ public class ConexionBD {
             conexion = DriverManager.getConnection(URL, USER, PASSWORD);
             System.out.println("✅ Conexión exitosa a la base de datos.");
         } catch (ClassNotFoundException e) {
-            System.out.println("❌ No se encontró el driver de MySQL.");
+            System.out.println("No se encontró el driver de MySQL.");
             e.printStackTrace();
         } catch (SQLException e) {
-            System.out.println("❌ Error al conectar con la base de datos.");
+            System.out.println("Error al conectar con la base de datos.");
             e.printStackTrace();
         }
         return conexion;
@@ -33,7 +33,7 @@ public class ConexionBD {
                 conexion.close();
                 System.out.println("🔌 Conexión cerrada.");
             } catch (SQLException e) {
-                System.out.println("❌ Error al cerrar la conexión.");
+                System.out.println(" Error al cerrar la conexión.");
                 e.printStackTrace();
             }
         }

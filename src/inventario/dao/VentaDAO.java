@@ -4,6 +4,7 @@ import inventario.modelo.DetalleVenta;
 import inventario.modelo.Venta;
 import inventario.util.ConexionBD;
 import java.sql.*;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -261,6 +262,42 @@ public class VentaDAO {
     }
 
 
+    public List<Venta> listarVentasPorRango(LocalDate desde, LocalDate hasta) {
+        List<Venta> lista = new ArrayList<>();
+
+        String sql = "SELECT * FROM Venta " +
+                    "WHERE DATE(fechaHora) BETWEEN ? AND ? " +
+                    "ORDER BY fechaHora";
+
+        try (Connection con = ConexionBD.getConexion();
+            PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setDate(1, Date.valueOf(desde));
+            ps.setDate(2, Date.valueOf(hasta));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Venta v = new Venta();
+                    v.setIdVenta(rs.getInt("idVenta"));
+                    v.setTotal(rs.getDouble("total"));
+                    v.setImpServicio(rs.getDouble("impuestoServicio"));
+                    v.setIdUsuario(rs.getInt("idUsuario"));
+
+                    Timestamp ts = rs.getTimestamp("fechaHora");
+                    if (ts != null) {
+                        v.setFechaHora(ts.toLocalDateTime());
+                    }
+
+                    lista.add(v);
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return lista;
+    }
 
 
 
