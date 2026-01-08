@@ -22,17 +22,39 @@ public class PanelAdmin extends JFrame {
     private void initUI() {
 
         JPanel panel = new JPanel();
-        panel.setLayout(new GridLayout(5, 1, 10, 10));
+        panel.setLayout(new GridLayout(0, 1, 10, 10)); //  se ajusta a todos los botones
         panel.setBorder(BorderFactory.createEmptyBorder(25, 50, 25, 50));
 
         JLabel titulo = new JLabel("PANEL DEL ADMINISTRADOR", SwingConstants.CENTER);
         titulo.setFont(new Font("Segoe UI", Font.BOLD, 18));
+
+        JButton btnIrVentas = new JButton("🧾 Ir a Ventas");
+        btnIrVentas.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        btnIrVentas.addActionListener(e -> {
+            VentanaVenta v = new VentanaVenta(usuario); // ✅ usa el admin logueado
+            v.setVisible(true);
+            dispose(); // opcional
+        });
 
         JButton btnProductos = new JButton("📦 Gestión de productos");
         btnProductos.setFont(new Font("Segoe UI", Font.PLAIN, 16));
         btnProductos.addActionListener(e -> {
             GestionProductosFrame frame = new GestionProductosFrame();
             frame.setVisible(true);
+        });
+
+        JButton btnReporteUsuario = new JButton("📋 Ventas por usuario");
+        btnReporteUsuario.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        btnReporteUsuario.addActionListener(e -> {
+            ReporteVentasPorUsuarioFrame r = new ReporteVentasPorUsuarioFrame();
+            r.setVisible(true);
+        });
+
+        JButton btnVentasRango = new JButton("📅 Ventas por rango de fechas");
+        btnVentasRango.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        btnVentasRango.addActionListener(e -> {
+            ReporteVentasRangoFrame r = new ReporteVentasRangoFrame();
+            r.setVisible(true);
         });
 
         JButton btnReporteVentas = new JButton("📊 Reporte de ventas");
@@ -47,22 +69,6 @@ public class PanelAdmin extends JFrame {
         btnUsuarios.addActionListener(e -> {
             JOptionPane.showMessageDialog(this, "Módulo en desarrollo.");
         });
-        JButton btnReporteUsuario = new JButton("📋 Ventas por usuario");
-        btnReporteUsuario.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        btnReporteUsuario.addActionListener(e -> {
-            ReporteVentasPorUsuarioFrame r = new ReporteVentasPorUsuarioFrame();
-            r.setVisible(true);
-        });
-        panel.add(btnReporteUsuario);
-
-        JButton btnVentasRango = new JButton("📅 Ventas por rango de fechas");
-        btnVentasRango.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        btnVentasRango.addActionListener(e -> {
-            ReporteVentasRangoFrame r = new ReporteVentasRangoFrame();
-            r.setVisible(true);
-        });
-        panel.add(btnVentasRango);
-
 
         JButton btnCerrar = new JButton("🚪 Cerrar sesión");
         btnCerrar.setFont(new Font("Segoe UI", Font.PLAIN, 16));
@@ -72,12 +78,17 @@ public class PanelAdmin extends JFrame {
             this.dispose();
         });
 
+        // ✅ Orden: título → ventas → reportes → productos → etc
         panel.add(titulo);
+        panel.add(btnIrVentas);
         panel.add(btnProductos);
+        panel.add(btnReporteUsuario);
+        panel.add(btnVentasRango);
         panel.add(btnReporteVentas);
         panel.add(btnUsuarios);
         panel.add(btnCerrar);
 
         add(panel);
     }
+
 }

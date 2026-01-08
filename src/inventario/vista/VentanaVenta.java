@@ -1,5 +1,6 @@
 package inventario.vista;
 
+import inventario.dao.ConfigDAO;
 import inventario.dao.DetalleVentaDAO;
 import inventario.dao.ProductoDAO;
 import inventario.dao.VentaDAO;
@@ -7,6 +8,8 @@ import inventario.modelo.DetalleVenta;
 import inventario.modelo.Producto;
 import inventario.modelo.Usuario;
 import inventario.modelo.Venta;
+import inventario.util.TicketBuilder;
+import inventario.util.TicketPrinter;
 import java.awt.*;
 import java.util.List;
 import javax.swing.*;
@@ -117,12 +120,17 @@ public class VentanaVenta extends JFrame {
         btnConfirmar.addActionListener(e -> confirmarVentaActual());
         btnCancelar = new JButton("Cancelar venta");
         btnCancelar.addActionListener(e -> cancelarVentaActual());
+        JButton btnCierreCaja = new JButton("Cierre de caja");
+        btnCierreCaja.addActionListener(e -> abrirCierreConPIN());
+
 
         panelBotones.add(btnAgregar);
         panelBotones.add(btnEliminar);
         panelBotones.add(btnModificar);
         panelBotones.add(btnConfirmar);
         panelBotones.add(btnCancelar);
+        panelBotones.add(btnCierreCaja);
+
 
         panelInferior.add(panelTotales, BorderLayout.WEST);
         panelInferior.add(panelBotones, BorderLayout.EAST);
@@ -223,9 +231,11 @@ public class VentanaVenta extends JFrame {
         VentaDAO vdao = new VentaDAO();
         Venta v = vdao.obtenerVenta(idVenta);
 
-        lblTotal.setText(String.format("%.2f", v.getTotal()));
+        double subtotal = v.getTotal() - v.getImpServicio();
+        lblTotal.setText(String.format("%.2f", subtotal));
         lblServicio.setText(String.format("%.2f", v.getImpServicio()));
-        lblTotalPagar.setText(String.format("%.2f", v.getTotal() + v.getImpServicio()));
+        lblTotalPagar.setText(String.format("%.2f", v.getTotal()));
+
     }
 
     private void eliminarItem() {
@@ -320,9 +330,25 @@ public class VentanaVenta extends JFrame {
             return;
         }
 
+        // Elegir tipo de servicio (SALON cobra 10% extra)
+        String[] opciones = {"SALON", "BARRA"};
+        String tipoServicio = (String) JOptionPane.showInputDialog(
+                this,
+                "Tipo de servicio:",
+                "Confirmar venta",
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                opciones,
+                "SALON"
+        );
+
+        if (tipoServicio == null) {
+            return; // Canceló el diálogo
+        }
+
         int resp = JOptionPane.showConfirmDialog(
                 this,
-                "¿Confirmar la venta?",
+                "¿Confirmar la venta? (SALON aplica 10% por mesa)",
                 "Confirmar venta",
                 JOptionPane.YES_NO_OPTION
         );
@@ -331,11 +357,48 @@ public class VentanaVenta extends JFrame {
             return;
         }
 
-        // Aquí podrías, en futuro, imprimir un tiquete, registrar método de pago, etc.
+        try {
+            VentaDAO vdao = new VentaDAO();
+            Venta ventaConfirmada = vdao.confirmarVenta(idVenta, tipoServicio);
 
-        JOptionPane.showMessageDialog(this, " Venta confirmada correctamente.");
-        reiniciarVenta();
+            DetalleVentaDAO ddao = new DetalleVentaDAO();
+            List<TicketBuilder.Item> items = ddao.obtenerItemsParaTicket(idVenta);
+
+            // OJO: subtotal = total - impServicio (como tu lógica)
+            double subtotal = ventaConfirmada.getTotal() - ventaConfirmada.getImpServicio();
+
+            String ticket = TicketBuilder.build(
+                    "Pollos Corraleros",         // cámbialo
+                    idVenta,
+                    ventaConfirmada.getTipoServicio(),
+                    subtotal,
+                    ventaConfirmada.getImpServicio(),
+                    ventaConfirmada.getTotal(),
+                    items
+            );
+
+            TicketPrinter.previewAndPrint(ticket, "Tiquete - Venta #" + idVenta);
+
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    " Venta confirmada\n" +
+                    "Tipo: " + ventaConfirmada.getTipoServicio() + "\n" +
+                    "Cargo servicio: " + String.format("%.2f", ventaConfirmada.getImpServicio()) + "\n" +
+                    "Total a pagar: " + String.format("%.2f", ventaConfirmada.getTotal())
+            );
+
+            reiniciarVenta();
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                    " No se pudo confirmar la venta:\n" + ex.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
     }
+
 
     private void cancelarVentaActual() {
         if (idVenta == -1) {
@@ -388,6 +451,13 @@ public class VentanaVenta extends JFrame {
         JMenu menuAdmin = new JMenu("Admin");
         JMenuItem itemProductos = new JMenuItem("Gestión de productos");
         JMenuItem itemVentasDia = new JMenuItem("Reporte de ventas del día");
+        JMenuItem itemCierre = new JMenuItem("Cierre de caja (global)");
+        itemCierre.addActionListener(e -> {
+            CierreCajaFrame c = new CierreCajaFrame();
+            c.setVisible(true);
+        });
+        menuAdmin.add(itemCierre);
+
 
         itemVentasDia.addActionListener(e -> {
             ReporteVentasRangoFrame r = new ReporteVentasRangoFrame();
@@ -405,6 +475,51 @@ public class VentanaVenta extends JFrame {
         bar.add(menuAdmin);
         setJMenuBar(bar);
     }
+
+    private void abrirCierreConPIN() {
+        JPasswordField pf = new JPasswordField();
+        int ok = JOptionPane.showConfirmDialog(
+                this,
+                pf,
+                "Ingrese PIN de gerente para Cierre de Caja",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE
+        );
+
+        if (ok != JOptionPane.OK_OPTION) return;
+
+        String pinIngresado = new String(pf.getPassword()).trim();
+        if (pinIngresado.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "PIN vacío.");
+            return;
+        }
+
+        try {
+            ConfigDAO cdao = new ConfigDAO();
+            String pinReal = cdao.getValor("PIN_CIERRE_CAJA");
+
+            if (pinReal == null) {
+                JOptionPane.showMessageDialog(this,
+                        "No hay PIN configurado. Configure 'PIN_CIERRE_CAJA' en la tabla Config.",
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            if (!pinReal.equals(pinIngresado)) {
+                JOptionPane.showMessageDialog(this, "PIN incorrecto.", "Acceso denegado",
+                        JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            CierreCajaFrame c = new CierreCajaFrame();
+            c.setVisible(true);
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error verificando PIN:\n" + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
 
 
 }

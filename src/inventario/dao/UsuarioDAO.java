@@ -5,6 +5,7 @@ import inventario.util.ConexionBD;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -133,5 +134,20 @@ public class UsuarioDAO {
         }
         return u;
     }
+
+    public boolean validarPasswordAdmin(String password) throws SQLException {
+        String sql = "SELECT 1 FROM Usuario WHERE rol='ADMIN' AND password=? LIMIT 1";
+
+        try (Connection con = ConexionBD.getConexion();
+            PreparedStatement ps = con.prepareStatement(sql)) {
+
+            ps.setString(1, password);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
 
 }
