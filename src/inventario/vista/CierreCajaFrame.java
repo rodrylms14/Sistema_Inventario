@@ -3,10 +3,9 @@ package inventario.vista;
 import inventario.dao.CierreCajaDAO;
 import inventario.modelo.ResumenCaja;
 import inventario.util.TicketPrinter;
-
-import javax.swing.*;
 import java.awt.*;
 import java.time.LocalDate;
+import javax.swing.*;
 
 public class CierreCajaFrame extends JFrame {
 

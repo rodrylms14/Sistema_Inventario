@@ -42,7 +42,7 @@ public class VentanaVenta extends JFrame {
     public VentanaVenta(Usuario usuario) {
         this.usuario = usuario;
         this.idUsuarioLogueado = usuario.getIdUsuario();
-        this.esAdmin = "ADMIN".equalsIgnoreCase(usuario.getRol());  // ⬅️ AQUÍ
+        this.esAdmin = "ADMIN".equalsIgnoreCase(usuario.getRol());  
 
         setTitle("MiTienda POS - Venta | Usuario: " + usuario.getNombreCompleto() +
                 " (" + usuario.getRol() + ")");
@@ -364,11 +364,10 @@ public class VentanaVenta extends JFrame {
             DetalleVentaDAO ddao = new DetalleVentaDAO();
             List<TicketBuilder.Item> items = ddao.obtenerItemsParaTicket(idVenta);
 
-            // OJO: subtotal = total - impServicio (como tu lógica)
             double subtotal = ventaConfirmada.getTotal() - ventaConfirmada.getImpServicio();
 
             String ticket = TicketBuilder.build(
-                    "Pollos Corraleros",         // cámbialo
+                    "Pollos Corraleros",         
                     idVenta,
                     ventaConfirmada.getTipoServicio(),
                     subtotal,
