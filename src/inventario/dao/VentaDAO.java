@@ -3,6 +3,7 @@ package inventario.dao;
 import inventario.modelo.DetalleVenta;
 import inventario.modelo.Venta;
 import inventario.util.ConexionBD;
+import inventario.util.ResultadoOperacion;
 import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -11,82 +12,173 @@ import java.util.List;
 public class VentaDAO {
 
     public int crearVenta(Venta v) {
-        int idGenerado = -1;
 
-        String sql = "INSERT INTO Venta (total, idCliente, idUsuario, tipoServicio, descuentoTotal, impuestoServicio) "
-                   + "VALUES (0, ?, ?, ?, 0, 0)";
+        String sql = """
+            INSERT INTO venta (total, idCliente, idUsuario, tipoServicio, descuentoTotal, impuestoServicio, estado)
+            VALUES (0, ?, ?, ?, 0, 0, 'ABIERTA')
+        """;
 
         try (Connection con = ConexionBD.getConexion();
-             PreparedStatement ps = con.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            PreparedStatement ps = con.prepareStatement(
+                    sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
 
-            // idCliente puede ser null
+            // idCliente puede ser NULL
             if (v.getIdCliente() == null) {
-                ps.setNull(1, Types.INTEGER);
+                ps.setNull(1, java.sql.Types.INTEGER);
             } else {
                 ps.setInt(1, v.getIdCliente());
             }
 
             ps.setInt(2, v.getIdUsuario());
-            ps.setString(3, v.getTipoServicio());
+            ps.setString(3, v.getTipoServicio()); // BARRA o SALON
 
             ps.executeUpdate();
 
-            ResultSet rs = ps.getGeneratedKeys();
-            if (rs.next()) {
-                idGenerado = rs.getInt(1);
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) {
+                    return rs.getInt(1); // idVenta generado
+                }
             }
 
-        } catch (Exception e) {
-            System.out.println("Error al crear venta");
+        } catch (SQLException e) {
+            System.out.println(" Error al crear venta");
             e.printStackTrace();
         }
 
-        return idGenerado;
+        return -1;
     }
 
-    public boolean agregarDetalle(DetalleVenta d) {
-        String sql = "INSERT INTO DetalleVenta (idVenta, idProducto, cantidad, precioUnitario, subtotal) "
-                   + "VALUES (?, ?, ?, ?, ?)";
 
-        try (Connection con = ConexionBD.getConexion();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+    public ResultadoOperacion agregarDetalle(DetalleVenta d) {
+        String sqlProd = "SELECT cantidadProducto FROM Producto WHERE idProducto=? FOR UPDATE";
+        String sqlDescontar = "UPDATE Producto SET cantidadProducto = cantidadProducto - ? WHERE idProducto=?";
+        String sqlInsert = "INSERT INTO DetalleVenta (idVenta, idProducto, cantidad, precioUnitario, subtotal) VALUES (?,?,?,?,?)";
 
-            ps.setInt(1, d.getIdVenta());
-            ps.setInt(2, d.getIdProducto());
-            ps.setInt(3, d.getCantidad());
-            ps.setDouble(4, d.getPrecioUnitario());
-            ps.setDouble(5, d.getSubTotal());
+        Connection con = null;
+        try {
+            con = ConexionBD.getConexion();
+            con.setAutoCommit(false);
 
-            ps.executeUpdate();
+            int stock;
+            try (PreparedStatement ps = con.prepareStatement(sqlProd)) {
+                ps.setInt(1, d.getIdProducto());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        con.rollback();
+                        return ResultadoOperacion.error("Producto no existe.");
+                    }
+                    stock = rs.getInt(1);
+                }
+            }
+
+            if (d.getCantidad() <= 0) {
+                con.rollback();
+                return ResultadoOperacion.error("Cantidad inválida.");
+            }
+
+            if (stock < d.getCantidad()) {
+                con.rollback();
+                return ResultadoOperacion.error("Stock insuficiente. Disponible: " + stock);
+            }
+
+            // Reservar stock
+            try (PreparedStatement ps = con.prepareStatement(sqlDescontar)) {
+                ps.setInt(1, d.getCantidad());
+                ps.setInt(2, d.getIdProducto());
+                ps.executeUpdate();
+            }
+
+            // Insertar detalle
+            try (PreparedStatement ps = con.prepareStatement(sqlInsert)) {
+                ps.setInt(1, d.getIdVenta());
+                ps.setInt(2, d.getIdProducto());
+                ps.setInt(3, d.getCantidad());
+                ps.setDouble(4, d.getPrecioUnitario());
+                ps.setDouble(5, d.getSubTotal());
+                ps.executeUpdate();
+            }
+
+            recalcularTotales(con, d.getIdVenta());
+
+            con.commit();
+            return ResultadoOperacion.exito("Agregado al carrito.");
+
+        } catch (Exception e) {
+            try { if (con != null) con.rollback(); } catch (SQLException ignore) {}
+            e.printStackTrace();
+            return ResultadoOperacion.error("Error de base de datos: " + e.getMessage());
+
+        } finally {
+            try { if (con != null) con.setAutoCommit(true); } catch (SQLException ignore) {}
+            try { if (con != null) con.close(); } catch (SQLException ignore) {}
+        }
+    }
+
+
+
+    public boolean eliminarDetalle(int idDetalle) {
+        String sqlSel = "SELECT idVenta, idProducto, cantidad FROM DetalleVenta WHERE idDetalle=? FOR UPDATE";
+        String sqlDel = "DELETE FROM DetalleVenta WHERE idDetalle=?";
+        String sqlDev = "UPDATE Producto SET cantidadProducto = cantidadProducto + ? WHERE idProducto=?";
+
+        Connection con = null;
+        try {
+            con = ConexionBD.getConexion();
+            con.setAutoCommit(false);
+
+            int idVenta, idProducto, cantidad;
+
+            // 1) Leer el detalle (bloqueado)
+            try (PreparedStatement ps = con.prepareStatement(sqlSel)) {
+                ps.setInt(1, idDetalle);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        con.rollback();
+                        return false;
+                    }
+                    idVenta = rs.getInt("idVenta");
+                    idProducto = rs.getInt("idProducto");
+                    cantidad = rs.getInt("cantidad");
+                }
+            }
+
+            // 2) Borrar el detalle
+            int filas;
+            try (PreparedStatement ps = con.prepareStatement(sqlDel)) {
+                ps.setInt(1, idDetalle);
+                filas = ps.executeUpdate();
+            }
+
+            if (filas == 0) {
+                con.rollback();
+                return false;
+            }
+
+            // 3) Devolver stock reservado
+            try (PreparedStatement ps = con.prepareStatement(sqlDev)) {
+                ps.setInt(1, cantidad);
+                ps.setInt(2, idProducto);
+                ps.executeUpdate();
+            }
+
+            // 4) Recalcular totales
+            recalcularTotales(con, idVenta);
+
+            con.commit();
             return true;
 
         } catch (Exception e) {
-            System.out.println(" Error al agregar detalle de venta");
+            try { if (con != null) con.rollback(); } catch (SQLException ignore) {}
             e.printStackTrace();
             return false;
+
+        } finally {
+            try { if (con != null) con.setAutoCommit(true); } catch (SQLException ignore) {}
+            try { if (con != null) con.close(); } catch (SQLException ignore) {}
         }
     }
 
-    public boolean eliminarDetalle(int idDetalle) {
-        String sql = "DELETE FROM DetalleVenta WHERE idDetalle=?";
 
-        try (Connection con = ConexionBD.getConexion();
-            PreparedStatement ps = con.prepareStatement(sql)) {
-
-            System.out.println("Intentando borrar idDetalle = " + idDetalle);
-            ps.setInt(1, idDetalle);
-
-            int filas = ps.executeUpdate();
-            System.out.println("Filas afectadas = " + filas);
-
-            return filas > 0;
-
-        } catch (Exception e) {
-            System.out.println(" Error al eliminar detalle");
-            e.printStackTrace();
-            return false;
-        }
-    }
 
 
 
@@ -129,125 +221,203 @@ public class VentaDAO {
     }
 
     public boolean cancelarVenta(int idVenta) {
-        String sqlTraerDetalles = """
-            SELECT idProducto, cantidad
-            FROM DetalleVenta
-            WHERE idVenta = ?
-            FOR UPDATE
-        """;
+    String sqlLockVenta = "SELECT estado FROM Venta WHERE idVenta = ? FOR UPDATE";
 
-        String sqlRevertirStock = """
-            UPDATE Producto
-            SET cantidadProducto = cantidadProducto + ?
-            WHERE idProducto = ?
-        """;
+    String sqlTraerDetalles = """
+        SELECT idProducto, cantidad
+        FROM DetalleVenta
+        WHERE idVenta = ?
+        FOR UPDATE
+    """;
 
-        String sqlEliminarDetalles = "DELETE FROM DetalleVenta WHERE idVenta = ?";
+    String sqlRevertirStock = """
+        UPDATE Producto
+        SET cantidadProducto = cantidadProducto + ?
+        WHERE idProducto = ?
+    """;
 
-        String sqlMarcarAnulada = """
-            UPDATE Venta
-            SET estado = 'ANULADA', total = 0, impuestoServicio = 0
-            WHERE idVenta = ?
-        """;
+    String sqlEliminarDetalles = "DELETE FROM DetalleVenta WHERE idVenta = ?";
 
-        Connection con = null;
+    String sqlMarcarAnulada = """
+        UPDATE Venta
+        SET estado = 'ANULADA', total = 0, impuestoServicio = 0
+        WHERE idVenta = ? AND estado = 'ABIERTA'
+    """;
 
-        try {
-            con = ConexionBD.getConexion();
-            con.setAutoCommit(false);
+    Connection con = null;
 
-            // 1) Traer detalles (y bloquear para evitar carreras)
-            try (PreparedStatement ps = con.prepareStatement(sqlTraerDetalles)) {
-                ps.setInt(1, idVenta);
+    try {
+        con = ConexionBD.getConexion();
+        con.setAutoCommit(false);
 
-                try (ResultSet rs = ps.executeQuery();
-                    PreparedStatement psStock = con.prepareStatement(sqlRevertirStock)) {
+        // 0) Bloquear y validar venta
+        String estado;
+        try (PreparedStatement ps = con.prepareStatement(sqlLockVenta)) {
+            ps.setInt(1, idVenta);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    con.rollback();
+                    return false; // venta no existe
+                }
+                estado = rs.getString(1);
+            }
+        }
 
-                    // 2) Revertir stock por cada item del carrito
-                    while (rs.next()) {
-                        int idProducto = rs.getInt("idProducto");
-                        int cantidad = rs.getInt("cantidad");
+        // Si ya no está ABIERTA, no cancelar
+        if (estado == null || !estado.equalsIgnoreCase("ABIERTA")) {
+            con.rollback();
+            return false;
+        }
 
-                        psStock.setInt(1, cantidad);
-                        psStock.setInt(2, idProducto);
-                        psStock.executeUpdate();
-                    }
+        // 1) Traer detalles y devolver stock
+        try (PreparedStatement ps = con.prepareStatement(sqlTraerDetalles)) {
+            ps.setInt(1, idVenta);
+
+            try (ResultSet rs = ps.executeQuery();
+                 PreparedStatement psStock = con.prepareStatement(sqlRevertirStock)) {
+
+                while (rs.next()) {
+                    int idProducto = rs.getInt("idProducto");
+                    int cantidad = rs.getInt("cantidad");
+
+                    psStock.setInt(1, cantidad);
+                    psStock.setInt(2, idProducto);
+                    psStock.executeUpdate();
                 }
             }
+        }
 
-            // 3) Borrar detalles de la venta (carrito)
-            try (PreparedStatement ps = con.prepareStatement(sqlEliminarDetalles)) {
-                ps.setInt(1, idVenta);
+        // 2) Borrar detalles
+        try (PreparedStatement ps = con.prepareStatement(sqlEliminarDetalles)) {
+            ps.setInt(1, idVenta);
+            ps.executeUpdate();
+        }
+
+        // 3) Marcar ANULADA (solo si estaba ABIERTA)
+        int filas;
+        try (PreparedStatement ps = con.prepareStatement(sqlMarcarAnulada)) {
+            ps.setInt(1, idVenta);
+            filas = ps.executeUpdate();
+        }
+
+        if (filas == 0) {
+            con.rollback();
+            return false;
+        }
+
+        con.commit();
+        return true;
+
+    } catch (Exception e) {
+        try { if (con != null) con.rollback(); } catch (SQLException ignore) {}
+        e.printStackTrace();
+        return false;
+
+    } finally {
+        try {
+            if (con != null) {
+                con.setAutoCommit(true);
+                con.close();
+            }
+        } catch (SQLException ignore) {}
+    }
+}
+
+
+
+
+public boolean actualizarCantidadDetalle(int idDetalle, int nuevaCantidad) {
+    if (nuevaCantidad <= 0) return false;
+
+    String sqlSel = """
+        SELECT d.idVenta, d.idProducto, d.cantidad, d.precioUnitario, p.cantidadProducto
+        FROM DetalleVenta d
+        JOIN Producto p ON p.idProducto = d.idProducto
+        WHERE d.idDetalle = ?
+        FOR UPDATE
+    """;
+
+    String sqlUpdDet = "UPDATE DetalleVenta SET cantidad=?, subtotal=? WHERE idDetalle=?";
+    String sqlDesc = "UPDATE Producto SET cantidadProducto = cantidadProducto - ? WHERE idProducto=?";
+    String sqlDev  = "UPDATE Producto SET cantidadProducto = cantidadProducto + ? WHERE idProducto=?";
+
+    Connection con = null;
+    try {
+        con = ConexionBD.getConexion();
+        con.setAutoCommit(false);
+
+        int idVenta, idProducto, cantActual, stock;
+        double precio;
+
+        try (PreparedStatement ps = con.prepareStatement(sqlSel)) {
+            ps.setInt(1, idDetalle);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    con.rollback();
+                    return false;
+                }
+                idVenta = rs.getInt("idVenta");
+                idProducto = rs.getInt("idProducto");
+                cantActual = rs.getInt("cantidad");
+                precio = rs.getDouble("precioUnitario");
+                stock = rs.getInt("cantidadProducto");
+            }
+        }
+
+        int delta = nuevaCantidad - cantActual;
+
+        // Si no cambió la cantidad, no hacemos nada
+        if (delta == 0) {
+            con.rollback(); // o con.commit(); (no hay cambios). Rollback ahorra trabajo.
+            return true;
+        }
+
+        if (delta > 0) {
+            if (stock < delta) throw new SQLException("Stock insuficiente para aumentar cantidad.");
+            try (PreparedStatement ps = con.prepareStatement(sqlDesc)) {
+                ps.setInt(1, delta);
+                ps.setInt(2, idProducto);
                 ps.executeUpdate();
             }
-
-            // 4) Marcar la venta como ANULADA (no borramos la venta)
-            try (PreparedStatement ps = con.prepareStatement(sqlMarcarAnulada)) {
-                ps.setInt(1, idVenta);
-                int filas = ps.executeUpdate();
-                if (filas == 0) {
-                    throw new SQLException("No se encontró la venta id=" + idVenta);
-                }
+        } else { // delta < 0
+            try (PreparedStatement ps = con.prepareStatement(sqlDev)) {
+                ps.setInt(1, -delta);
+                ps.setInt(2, idProducto);
+                ps.executeUpdate();
             }
-
-            con.commit();
-            return true;
-
-        } catch (Exception e) {
-            try {
-                if (con != null) con.rollback();
-            } catch (SQLException ignore) {}
-            e.printStackTrace();
-            return false;
-
-        } finally {
-            try {
-                if (con != null) {
-                    con.setAutoCommit(true);
-                    con.close();
-                }
-            } catch (SQLException ignore) {}
         }
-    }
 
+        double nuevoSubtotal = precio * nuevaCantidad;
+        int filas;
+        try (PreparedStatement ps = con.prepareStatement(sqlUpdDet)) {
+            ps.setInt(1, nuevaCantidad);
+            ps.setDouble(2, nuevoSubtotal);
+            ps.setInt(3, idDetalle);
+            filas = ps.executeUpdate();
+        }
 
-
-    public boolean actualizarCantidadDetalle(int idDetalle, int nuevaCantidad) {
-        String sqlSelect = "SELECT precioUnitario FROM DetalleVenta WHERE idDetalle=?";
-        String sqlUpdate = "UPDATE DetalleVenta SET cantidad=?, subtotal=? WHERE idDetalle=?";
-
-        try (Connection con = ConexionBD.getConexion();
-            PreparedStatement psSel = con.prepareStatement(sqlSelect)) {
-
-            // 1) Obtener el precioUnitario actual del detalle
-            psSel.setInt(1, idDetalle);
-            ResultSet rs = psSel.executeQuery();
-
-            if (!rs.next()) {
-                System.out.println("No se encontró el detalle con idDetalle = " + idDetalle);
-                return false;
-            }
-
-            double precioUnitario = rs.getDouble("precioUnitario");
-            double nuevoSubtotal = precioUnitario * nuevaCantidad;
-
-            // 2) Actualizar cantidad y subtotal
-            try (PreparedStatement psUpd = con.prepareStatement(sqlUpdate)) {
-                psUpd.setInt(1, nuevaCantidad);
-                psUpd.setDouble(2, nuevoSubtotal);
-                psUpd.setInt(3, idDetalle);
-
-                int filas = psUpd.executeUpdate();
-                System.out.println("Filas actualizadas (detalle): " + filas);
-                return filas > 0;
-            }
-
-        } catch (Exception e) {
-            System.out.println(" Error al actualizar cantidad del detalle");
-            e.printStackTrace();
+        if (filas == 0) {
+            con.rollback();
             return false;
         }
+
+        recalcularTotales(con, idVenta);
+
+        con.commit();
+        return true;
+
+    } catch (Exception e) {
+        try { if (con != null) con.rollback(); } catch (SQLException ignore) {}
+        e.printStackTrace();
+        return false;
+
+    } finally {
+        try { if (con != null) con.setAutoCommit(true); } catch (SQLException ignore) {}
+        try { if (con != null) con.close(); } catch (SQLException ignore) {}
     }
+}
+
+
 
     public List<Venta> listarVentasDelDia() {
         List<Venta> lista = new ArrayList<>();
@@ -349,135 +519,108 @@ public class VentaDAO {
         return lista;
     }
 
-    public Venta confirmarVenta(int idVenta, String tipoServicio) throws SQLException {
-    if (tipoServicio == null) tipoServicio = "BARRA";
-    tipoServicio = tipoServicio.trim().toUpperCase();
+    public Venta confirmarVenta(int idVenta, String tipoServicio) {
+        Connection con = null;
 
-    Connection con = null;
-    try {
-        con = ConexionBD.getConexion();
-        con.setAutoCommit(false);
+        String sqlTieneItems = "SELECT COUNT(*) FROM DetalleVenta WHERE idVenta = ?";
+        String sqlUpdServicio = "UPDATE Venta SET tipoServicio = ? WHERE idVenta = ?";
+        String sqlConfirmar = "UPDATE Venta SET estado = 'CONFIRMADA' WHERE idVenta = ? AND estado = 'ABIERTA'";
 
-        String sqlItems = """
-            SELECT d.idProducto, d.cantidad, p.cantidadProducto, d.subtotal
-            FROM DetalleVenta d
-            JOIN Producto p ON p.idProducto = d.idProducto
-            WHERE d.idVenta = ?
-            FOR UPDATE
-        """;
+        try {
+            con = ConexionBD.getConexion();
+            con.setAutoCommit(false);
 
-        double subtotalVenta = 0.0;
+            // (Opcional pero PRO) bloquear la venta durante confirmación
+            try (PreparedStatement ps = con.prepareStatement("SELECT idVenta FROM Venta WHERE idVenta = ? FOR UPDATE")) {
+                ps.setInt(1, idVenta);
+                ps.executeQuery();
+            }
 
-        try (PreparedStatement ps = con.prepareStatement(sqlItems)) {
-            ps.setInt(1, idVenta);
-            try (ResultSet rs = ps.executeQuery()) {
-                boolean hayItems = false;
-
-                while (rs.next()) {
-                    hayItems = true;
-
-                    int idProducto = rs.getInt("idProducto");
-                    int cantidad = rs.getInt("cantidad");
-                    int stock = rs.getInt("cantidadProducto");
-                    double subtotalLinea = rs.getDouble("subtotal");
-
-                    if (cantidad <= 0) {
-                        throw new SQLException("Cantidad inválida para producto id=" + idProducto);
-                    }
-                    if (stock < cantidad) {
-                        throw new SQLException(
-                            "Stock insuficiente para producto id=" + idProducto +
-                            ". Stock: " + stock + ", requerido: " + cantidad
-                        );
-                    }
-
-                    subtotalVenta += subtotalLinea;
-                }
-
-                if (!hayItems) {
-                    throw new SQLException("El carrito está vacío.");
+            // 1) Validar que la venta tenga items
+            int items = 0;
+            try (PreparedStatement ps = con.prepareStatement(sqlTieneItems)) {
+                ps.setInt(1, idVenta);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) items = rs.getInt(1);
                 }
             }
-        }
-
-        String sqlDescontar = """
-            UPDATE Producto
-            SET cantidadProducto = cantidadProducto - ?
-            WHERE idProducto = ?
-        """;
-
-        String sqlDetalles = """
-            SELECT idProducto, cantidad
-            FROM DetalleVenta
-            WHERE idVenta = ?
-        """;
-
-        try (PreparedStatement psDetalles = con.prepareStatement(sqlDetalles);
-             PreparedStatement psDescontar = con.prepareStatement(sqlDescontar)) {
-
-            psDetalles.setInt(1, idVenta);
-            try (ResultSet rs = psDetalles.executeQuery()) {
-                while (rs.next()) {
-                    int idProducto = rs.getInt("idProducto");
-                    int cantidad = rs.getInt("cantidad");
-
-                    psDescontar.setInt(1, cantidad);
-                    psDescontar.setInt(2, idProducto);
-                    psDescontar.executeUpdate();
-                }
+            if (items == 0) {
+                con.rollback();
+                return null;
             }
-        }
 
-        // Calcular cargo por mesa (10% si es SALON)
-        double impServicio = 0.0;
-        if ("SALON".equals(tipoServicio)) {
-            impServicio = subtotalVenta * 0.10;
-        }
-
-        double totalFinal = subtotalVenta + impServicio;
-
-        // Actualizar la venta con totales finales
-        String sqlUpdateVenta = """
-            UPDATE Venta
-            SET tipoServicio = ?, impuestoServicio = ?, total = ?, estado='CONFIRMADA'
-            WHERE idVenta = ?
-        """;
-
-        try (PreparedStatement ps = con.prepareStatement(sqlUpdateVenta)) {
-            ps.setString(1, tipoServicio);
-            ps.setDouble(2, impServicio);
-            ps.setDouble(3, totalFinal);
-            ps.setInt(4, idVenta);
-
-            int filas = ps.executeUpdate();
-            if (filas == 0) {
-                throw new SQLException("No se encontró la venta id=" + idVenta);
+            // 2) Guardar tipoServicio
+            try (PreparedStatement ps = con.prepareStatement(sqlUpdServicio)) {
+                ps.setString(1, tipoServicio);
+                ps.setInt(2, idVenta);
+                ps.executeUpdate();
             }
-        }
 
-        //  Commit
-        con.commit();
+            // 3) Recalcular totales
+            recalcularTotales(con, idVenta);
 
-        // Devolver un objeto Venta con los valores finales
-        Venta v = new Venta();
-        v.setIdVenta(idVenta);
-        v.setTipoServicio(tipoServicio);
-        v.setImpServicio(impServicio);
-        v.setTotal(totalFinal);
-        return v;
+            // 4) Confirmar solo si estaba ABIERTA
+            int rows;
+            try (PreparedStatement ps = con.prepareStatement(sqlConfirmar)) {
+                ps.setInt(1, idVenta);
+                rows = ps.executeUpdate();
+            }
+            if (rows == 0) {
+                con.rollback();
+                return null;
+            }
 
-    } catch (SQLException ex) {
-        if (con != null) {
-            try { con.rollback(); } catch (SQLException ignore) {}
-        }
-        throw ex; // para que la UI muestre el error exacto (stock insuficiente, etc.)
-    } finally {
-        if (con != null) {
-            try { con.setAutoCommit(true); } catch (SQLException ignore) {}
-            try { con.close(); } catch (SQLException ignore) {}
+            con.commit();
+            return obtenerVenta(idVenta);
+
+        } catch (Exception e) {
+            try { if (con != null) con.rollback(); } catch (SQLException ignore) {}
+            e.printStackTrace();
+            return null;
+
+        } finally {
+            try { if (con != null) con.setAutoCommit(true); } catch (SQLException ignore) {}
+            try { if (con != null) con.close(); } catch (SQLException ignore) {}
         }
     }
-}
+
+
+
+    private void recalcularTotales(Connection conn, int idVenta) throws SQLException {
+        double subtotal = 0.0;
+        String tipoServicio = "BARRA";
+
+        // 1) subtotal del carrito
+        String sqlSubtotal = "SELECT COALESCE(SUM(subtotal), 0) FROM detalleventa WHERE idVenta = ?";
+        try (var ps = conn.prepareStatement(sqlSubtotal)) {
+            ps.setInt(1, idVenta);
+            try (var rs = ps.executeQuery()) {
+                if (rs.next()) subtotal = rs.getDouble(1);
+            }
+        }
+
+        // 2) tipo de servicio
+        String sqlServicio = "SELECT tipoServicio FROM venta WHERE idVenta = ?";
+        try (var ps = conn.prepareStatement(sqlServicio)) {
+            ps.setInt(1, idVenta);
+            try (var rs = ps.executeQuery()) {
+                if (rs.next() && rs.getString(1) != null) tipoServicio = rs.getString(1);
+            }
+        }
+
+        double impServicio = tipoServicio.equalsIgnoreCase("SALON") ? subtotal * 0.10 : 0.0;
+        double total = subtotal + impServicio;
+
+        // 3) actualizar venta
+        String sqlUpd = "UPDATE venta SET total = ?, impuestoServicio = ? WHERE idVenta = ?";
+        try (var ps = conn.prepareStatement(sqlUpd)) {
+            ps.setDouble(1, total);
+            ps.setDouble(2, impServicio);
+            ps.setInt(3, idVenta);
+            ps.executeUpdate();
+        }
+    }
+
 
 
 }

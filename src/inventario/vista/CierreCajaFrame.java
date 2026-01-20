@@ -10,8 +10,12 @@ import javax.swing.*;
 public class CierreCajaFrame extends JFrame {
 
     private final CierreCajaDAO dao = new CierreCajaDAO();
+
+    // 🔴 Guardamos el usuario que está haciendo el cierre
+    private final int idUsuarioLogueado;
+
     private LocalDate fecha = LocalDate.now();
-    private ResumenCaja resumen = new ResumenCaja(0,0,0,0);
+    private ResumenCaja resumen = new ResumenCaja(0, 0, 0, 0);
 
     private JLabel lblFecha = new JLabel();
     private JLabel lblVentas = new JLabel("0");
@@ -20,7 +24,10 @@ public class CierreCajaFrame extends JFrame {
     private JLabel lblTotal = new JLabel("0.00");
     private JTextField txtObs = new JTextField();
 
-    public CierreCajaFrame() {
+    // ✅ Constructor correcto: recibe idUsuario
+    public CierreCajaFrame(int idUsuarioLogueado) {
+        this.idUsuarioLogueado = idUsuarioLogueado;
+
         setTitle("Cierre de Caja (Global)");
         setSize(520, 320);
         setLocationRelativeTo(null);
@@ -31,8 +38,8 @@ public class CierreCajaFrame extends JFrame {
     }
 
     private void initUI() {
-        JPanel main = new JPanel(new BorderLayout(10,10));
-        main.setBorder(BorderFactory.createEmptyBorder(12,12,12,12));
+        JPanel main = new JPanel(new BorderLayout(10, 10));
+        main.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
 
         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
         lblFecha.setText("Fecha: " + fecha);
@@ -79,6 +86,7 @@ public class CierreCajaFrame extends JFrame {
             lblSubtotal.setText(String.format("%.2f", resumen.getSubtotalVentas()));
             lblCargo.setText(String.format("%.2f", resumen.getTotalCargoMesa()));
             lblTotal.setText(String.format("%.2f", resumen.getTotalFinal()));
+
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error cargando resumen:\n" + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
@@ -107,14 +115,19 @@ public class CierreCajaFrame extends JFrame {
                 return;
             }
 
-            boolean ok = dao.guardarCierre(fecha, resumen, txtObs.getText());
+            // ✅ ahora sí pasamos el idUsuario correcto
+            boolean ok = dao.guardarCierre(fecha, idUsuarioLogueado, resumen, txtObs.getText());
 
-            if (ok) JOptionPane.showMessageDialog(this, " Cierre guardado.");
-            else JOptionPane.showMessageDialog(this, " No se pudo guardar el cierre.");
+            if (ok) JOptionPane.showMessageDialog(this, "✅ Cierre guardado.");
+            else JOptionPane.showMessageDialog(this, "❌ No se pudo guardar el cierre.");
 
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error guardando cierre:\n" + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Error guardando cierre:\n" + ex.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 }

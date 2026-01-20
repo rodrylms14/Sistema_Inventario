@@ -69,7 +69,7 @@ public class UsuarioDAO {
             ps.setString(2, u.getUsername());
             ps.setString(3, u.getPassword());
             ps.setString(4, u.getRol());
-            ps.setInt(6, u.getIdUsuario());
+            ps.setInt(5, u.getIdUsuario());
 
             ps.executeUpdate();
             return true;

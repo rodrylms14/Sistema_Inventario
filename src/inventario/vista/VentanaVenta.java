@@ -8,6 +8,7 @@ import inventario.modelo.DetalleVenta;
 import inventario.modelo.Producto;
 import inventario.modelo.Usuario;
 import inventario.modelo.Venta;
+import inventario.util.ResultadoOperacion;
 import inventario.util.TicketBuilder;
 import inventario.util.TicketPrinter;
 import java.awt.*;
@@ -31,18 +32,19 @@ public class VentanaVenta extends JFrame {
     private JButton btnModificar;
     private JButton btnConfirmar;
     private JButton btnCancelar;
+    private JButton btnCierreCaja;
 
     private int idVenta = -1;
-    private Usuario usuario;
-    private int idUsuarioLogueado;
-    public boolean esAdmin;
+    private final Usuario usuario;
+    private final int idUsuarioLogueado;
+    public final boolean esAdmin;
 
-    private ProductoDAO productoDAO = new ProductoDAO();
+    private final ProductoDAO productoDAO = new ProductoDAO();
 
     public VentanaVenta(Usuario usuario) {
         this.usuario = usuario;
         this.idUsuarioLogueado = usuario.getIdUsuario();
-        this.esAdmin = "ADMIN".equalsIgnoreCase(usuario.getRol());  
+        this.esAdmin = "ADMIN".equalsIgnoreCase(usuario.getRol());
 
         setTitle("MiTienda POS - Venta | Usuario: " + usuario.getNombreCompleto() +
                 " (" + usuario.getRol() + ")");
@@ -53,77 +55,89 @@ public class VentanaVenta extends JFrame {
 
         initComponents();
         configurarPermisosPorRol();
-        crearMenuAdmin();            
+        crearMenuAdmin();
         cargarProductos();
     }
 
     private void initComponents() {
-        setLayout(new BorderLayout());
+
+        // ROOT (evita que se pierda el panel inferior)
+        JPanel root = new JPanel(new BorderLayout(10, 10));
+        root.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        setContentPane(root);
 
         // ---------- Tabla de Productos ----------
-        modeloProductos = new DefaultTableModel(
-                new Object[]{"ID", "Nombre", "Precio", "Stock"}, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false; // solo lectura
-            }
+        modeloProductos = new DefaultTableModel(new Object[]{"ID", "Nombre", "Precio", "Stock"}, 0) {
+            @Override public boolean isCellEditable(int row, int column) { return false; }
         };
 
         tablaProductos = new JTable(modeloProductos);
+        tablaProductos.setRowHeight(28);
+        tablaProductos.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        tablaProductos.setAutoCreateRowSorter(true);
+        tablaProductos.getTableHeader().setReorderingAllowed(false);
+
         JScrollPane scrollProductos = new JScrollPane(tablaProductos);
         scrollProductos.setBorder(BorderFactory.createTitledBorder("Productos"));
 
         // ---------- Tabla de Carrito ----------
-        modeloCarrito = new DefaultTableModel(
-                new Object[]{"ID Det.", "Producto", "Cant.", "P. Unit.", "Subtotal"}, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
+        modeloCarrito = new DefaultTableModel(new Object[]{"ID Det.", "Producto", "Cant.", "P. Unit.", "Subtotal"}, 0) {
+            @Override public boolean isCellEditable(int row, int column) { return false; }
         };
 
         tablaCarrito = new JTable(modeloCarrito);
+        tablaCarrito.setRowHeight(28);
+        tablaCarrito.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        tablaCarrito.setAutoCreateRowSorter(true);
+        tablaCarrito.getTableHeader().setReorderingAllowed(false);
+
         JScrollPane scrollCarrito = new JScrollPane(tablaCarrito);
         scrollCarrito.setBorder(BorderFactory.createTitledBorder("Carrito"));
 
-        // Dividir pantalla en dos paneles
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                scrollProductos, scrollCarrito);
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, scrollProductos, scrollCarrito);
         split.setResizeWeight(0.5);
-        add(split, BorderLayout.CENTER);
+        split.setOneTouchExpandable(true);
 
-        // ---------- Panel inferior: totales + botones ----------
-        JPanel panelInferior = new JPanel(new BorderLayout());
+        root.add(split, BorderLayout.CENTER);
 
-        // Totales
-        JPanel panelTotales = new JPanel(new GridLayout(3, 2, 5, 5));
+        // ---------- Labels Totales ----------
         lblTotal = new JLabel("0.00");
         lblServicio = new JLabel("0.00");
         lblTotalPagar = new JLabel("0.00");
 
-        panelTotales.add(new JLabel("Total:"));
-        panelTotales.add(lblTotal);
-        panelTotales.add(new JLabel("Servicio 10%:"));
-        panelTotales.add(lblServicio);
-        panelTotales.add(new JLabel("Total a pagar:"));
-        panelTotales.add(lblTotalPagar);
+        // ---------- Botones (usar el ATRIBUTO, no variable local) ----------
+        btnAgregar = new JButton("Agregar");
+        btnEliminar = new JButton("Eliminar");
+        btnModificar = new JButton("Modificar");
+        btnConfirmar = new JButton("Confirmar");
+        btnCancelar = new JButton("Cancelar");
+        btnCierreCaja = new JButton("Cierre de caja"); // ✅ ahora sí es el atributo
 
-        // Botones
-        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        btnAgregar = new JButton("Agregar al carrito");
         btnAgregar.addActionListener(e -> agregarProductoCarrito());
-        btnEliminar = new JButton("Eliminar ítem");
         btnEliminar.addActionListener(e -> eliminarItem());
-        btnModificar = new JButton("Modificar cantidad");
         btnModificar.addActionListener(e -> modificarCantidad());
-        btnConfirmar = new JButton("Confirmar venta");
         btnConfirmar.addActionListener(e -> confirmarVentaActual());
-        btnCancelar = new JButton("Cancelar venta");
         btnCancelar.addActionListener(e -> cancelarVentaActual());
-        JButton btnCierreCaja = new JButton("Cierre de caja");
         btnCierreCaja.addActionListener(e -> abrirCierreConPIN());
 
+        Dimension btnSize = new Dimension(140, 34);
+        btnAgregar.setPreferredSize(btnSize);
+        btnEliminar.setPreferredSize(btnSize);
+        btnModificar.setPreferredSize(btnSize);
+        btnConfirmar.setPreferredSize(btnSize);
+        btnCancelar.setPreferredSize(btnSize);
+        btnCierreCaja.setPreferredSize(btnSize);
 
+        // ---------- Panel inferior ----------
+        JPanel panelInferior = new JPanel(new BorderLayout(10, 10));
+        panelInferior.setPreferredSize(new Dimension(900, 160));
+
+        JPanel panelTotales = new JPanel(new GridLayout(1, 3, 10, 10));
+        panelTotales.add(crearCardTotal("Subtotal", lblTotal));
+        panelTotales.add(crearCardTotal("Servicio 10%", lblServicio));
+        panelTotales.add(crearCardTotal("Total a pagar", lblTotalPagar));
+
+        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         panelBotones.add(btnAgregar);
         panelBotones.add(btnEliminar);
         panelBotones.add(btnModificar);
@@ -131,16 +145,25 @@ public class VentanaVenta extends JFrame {
         panelBotones.add(btnCancelar);
         panelBotones.add(btnCierreCaja);
 
+        panelInferior.add(panelTotales, BorderLayout.CENTER);
+        panelInferior.add(panelBotones, BorderLayout.SOUTH);
 
-        panelInferior.add(panelTotales, BorderLayout.WEST);
-        panelInferior.add(panelBotones, BorderLayout.EAST);
+        root.add(panelInferior, BorderLayout.SOUTH);
 
-        add(panelInferior, BorderLayout.SOUTH);
+        // UX: doble click para agregar
+        tablaProductos.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) agregarProductoCarrito();
+            }
+        });
+
+        // Debug opcional (puedes borrar)
+        System.out.println("btnCierreCaja null? " + (btnCierreCaja == null));
     }
 
     public void cargarProductos() {
-        modeloProductos.setRowCount(0); // limpiar
-
+        modeloProductos.setRowCount(0);
         List<Producto> productos = productoDAO.listarProductos();
         for (Producto p : productos) {
             modeloProductos.addRow(new Object[]{
@@ -151,7 +174,6 @@ public class VentanaVenta extends JFrame {
             });
         }
     }
-
 
     private void agregarProductoCarrito() {
         int fila = tablaProductos.getSelectedRow();
@@ -164,24 +186,44 @@ public class VentanaVenta extends JFrame {
         String nombreProd = (String) modeloProductos.getValueAt(fila, 1);
         double precioUnitario = (double) modeloProductos.getValueAt(fila, 2);
 
-        // -------- Preguntar cantidad --------
         String input = JOptionPane.showInputDialog(this, "Cantidad para " + nombreProd + ":");
-        if (input == null) return; // cancelado
-        int cantidad = Integer.parseInt(input);
+        if (input == null) return;
 
-        // -------- Crear venta si no existe --------
+        input = input.trim();
+        if (input.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Debes ingresar una cantidad.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int cantidad;
+        try {
+            cantidad = Integer.parseInt(input);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Cantidad inválida. Solo números enteros.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        if (cantidad <= 0) {
+            JOptionPane.showMessageDialog(this, "La cantidad debe ser mayor a 0.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         if (idVenta == -1) {
-        Venta v = new Venta();
-        v.setIdCliente(null);
-        v.setIdUsuario(idUsuarioLogueado);
-        v.setTipoServicio("SALON");
+            Venta v = new Venta();
+            v.setIdCliente(null);
+            v.setIdUsuario(idUsuarioLogueado);
+            v.setTipoServicio("SALON");
 
             VentaDAO vdao = new VentaDAO();
             idVenta = vdao.crearVenta(v);
-            System.out.println("🔵 idVenta creada = " + idVenta);
+
+            if (idVenta <= 0) {
+                JOptionPane.showMessageDialog(this, "No se pudo crear la venta.", "Error", JOptionPane.ERROR_MESSAGE);
+                idVenta = -1;
+                return;
+            }
         }
 
-        // -------- Insertar el detalle --------
         double subtotal = precioUnitario * cantidad;
 
         DetalleVenta d = new DetalleVenta();
@@ -192,21 +234,20 @@ public class VentanaVenta extends JFrame {
         d.setSubTotal(subtotal);
 
         VentaDAO vdao = new VentaDAO();
-        boolean ok = vdao.agregarDetalle(d);
+        ResultadoOperacion r = vdao.agregarDetalle(d);
 
-        if (ok) {
-            JOptionPane.showMessageDialog(this, "Agregado al carrito.");
+        if (r.isOk()) {
+            JOptionPane.showMessageDialog(this, r.getMensaje());
             cargarCarrito();
             cargarProductos();
             actualizarTotales();
         } else {
-            JOptionPane.showMessageDialog(this, "Error al agregar producto.");
+            JOptionPane.showMessageDialog(this, r.getMensaje(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void cargarCarrito() {
         modeloCarrito.setRowCount(0);
-
         if (idVenta == -1) return;
 
         DetalleVentaDAO ddao = new DetalleVentaDAO();
@@ -217,7 +258,7 @@ public class VentanaVenta extends JFrame {
             Producto p = pdao.buscarPorId(det.getIdProducto());
             modeloCarrito.addRow(new Object[]{
                     det.getIdDetalle(),
-                    p.getNombreProducto(),
+                    (p != null ? p.getNombreProducto() : "Desconocido"),
                     det.getCantidad(),
                     det.getPrecioUnitario(),
                     det.getSubTotal()
@@ -230,12 +271,12 @@ public class VentanaVenta extends JFrame {
 
         VentaDAO vdao = new VentaDAO();
         Venta v = vdao.obtenerVenta(idVenta);
+        if (v == null) return;
 
         double subtotal = v.getTotal() - v.getImpServicio();
         lblTotal.setText(String.format("%.2f", subtotal));
         lblServicio.setText(String.format("%.2f", v.getImpServicio()));
         lblTotalPagar.setText(String.format("%.2f", v.getTotal()));
-
     }
 
     private void eliminarItem() {
@@ -283,7 +324,8 @@ public class VentanaVenta extends JFrame {
                 cantActual
         );
 
-        if (input == null) return; // Cancelado
+        if (input == null) return;
+
         int nuevaCant;
         try {
             nuevaCant = Integer.parseInt(input);
@@ -316,7 +358,7 @@ public class VentanaVenta extends JFrame {
         lblTotal.setText("0.00");
         lblServicio.setText("0.00");
         lblTotalPagar.setText("0.00");
-        cargarProductos(); // recarga stock actualizado
+        cargarProductos();
     }
 
     private void confirmarVentaActual() {
@@ -330,7 +372,6 @@ public class VentanaVenta extends JFrame {
             return;
         }
 
-        // Elegir tipo de servicio (SALON cobra 10% extra)
         String[] opciones = {"SALON", "BARRA"};
         String tipoServicio = (String) JOptionPane.showInputDialog(
                 this,
@@ -342,9 +383,7 @@ public class VentanaVenta extends JFrame {
                 "SALON"
         );
 
-        if (tipoServicio == null) {
-            return; // Canceló el diálogo
-        }
+        if (tipoServicio == null) return;
 
         int resp = JOptionPane.showConfirmDialog(
                 this,
@@ -353,9 +392,7 @@ public class VentanaVenta extends JFrame {
                 JOptionPane.YES_NO_OPTION
         );
 
-        if (resp != JOptionPane.YES_OPTION) {
-            return;
-        }
+        if (resp != JOptionPane.YES_OPTION) return;
 
         try {
             VentaDAO vdao = new VentaDAO();
@@ -367,7 +404,7 @@ public class VentanaVenta extends JFrame {
             double subtotal = ventaConfirmada.getTotal() - ventaConfirmada.getImpServicio();
 
             String ticket = TicketBuilder.build(
-                    "Pollos Corraleros",         
+                    "Pollos Corraleros",
                     idVenta,
                     ventaConfirmada.getTipoServicio(),
                     subtotal,
@@ -378,26 +415,24 @@ public class VentanaVenta extends JFrame {
 
             TicketPrinter.previewAndPrint(ticket, "Tiquete - Venta #" + idVenta);
 
-
             JOptionPane.showMessageDialog(
                     this,
-                    " Venta confirmada\n" +
-                    "Tipo: " + ventaConfirmada.getTipoServicio() + "\n" +
-                    "Cargo servicio: " + String.format("%.2f", ventaConfirmada.getImpServicio()) + "\n" +
-                    "Total a pagar: " + String.format("%.2f", ventaConfirmada.getTotal())
+                    "✅ Venta confirmada\n" +
+                            "Tipo: " + ventaConfirmada.getTipoServicio() + "\n" +
+                            "Cargo servicio: " + String.format("%.2f", ventaConfirmada.getImpServicio()) + "\n" +
+                            "Total a pagar: " + String.format("%.2f", ventaConfirmada.getTotal())
             );
 
             reiniciarVenta();
 
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this,
-                    " No se pudo confirmar la venta:\n" + ex.getMessage(),
+                    "❌ No se pudo confirmar la venta:\n" + ex.getMessage(),
                     "Error",
                     JOptionPane.ERROR_MESSAGE
             );
         }
     }
-
 
     private void cancelarVentaActual() {
         if (idVenta == -1) {
@@ -412,9 +447,7 @@ public class VentanaVenta extends JFrame {
                 JOptionPane.YES_NO_OPTION
         );
 
-        if (resp != JOptionPane.YES_OPTION) {
-            return;
-        }
+        if (resp != JOptionPane.YES_OPTION) return;
 
         VentaDAO vdao = new VentaDAO();
         boolean ok = vdao.cancelarVenta(idVenta);
@@ -423,25 +456,14 @@ public class VentanaVenta extends JFrame {
             JOptionPane.showMessageDialog(this, "⚠ Venta cancelada y stock revertido.");
             reiniciarVenta();
         } else {
-            JOptionPane.showMessageDialog(this, " No se pudo cancelar la venta.");
+            JOptionPane.showMessageDialog(this, "❌ No se pudo cancelar la venta.");
         }
     }
 
     private void configurarPermisosPorRol() {
-    if (!esAdmin) {
-        // Si NO es admin (es cajero):
-        // aquí decides qué limitar.
-
-        // Por ejemplo, podrías permitir todo menos cancelar venta completa:
-        // btnCancelar.setEnabled(false);
-        // btnCancelar.setToolTipText("Solo ADMIN puede cancelar la venta completa.");
-    } else {
-        // Es ADMIN: todo habilitado
-        btnCancelar.setEnabled(true);
+        // Si quieres que cualquier usuario vea el botón, NO escondas nada aquí.
+        // Si luego quieres restricciones, se agregan aquí.
     }
-    }
-
-
 
     private void crearMenuAdmin() {
         if (!esAdmin) return;
@@ -451,12 +473,13 @@ public class VentanaVenta extends JFrame {
         JMenuItem itemProductos = new JMenuItem("Gestión de productos");
         JMenuItem itemVentasDia = new JMenuItem("Reporte de ventas del día");
         JMenuItem itemCierre = new JMenuItem("Cierre de caja (global)");
+
         itemCierre.addActionListener(e -> {
-            CierreCajaFrame c = new CierreCajaFrame();
+            CierreCajaFrame c = new CierreCajaFrame(idUsuarioLogueado);
             c.setVisible(true);
         });
-        menuAdmin.add(itemCierre);
 
+        menuAdmin.add(itemCierre);
 
         itemVentasDia.addActionListener(e -> {
             ReporteVentasRangoFrame r = new ReporteVentasRangoFrame();
@@ -510,7 +533,7 @@ public class VentanaVenta extends JFrame {
                 return;
             }
 
-            CierreCajaFrame c = new CierreCajaFrame();
+            CierreCajaFrame c = new CierreCajaFrame(idUsuarioLogueado);
             c.setVisible(true);
 
         } catch (Exception ex) {
@@ -519,6 +542,21 @@ public class VentanaVenta extends JFrame {
         }
     }
 
+    private JPanel crearCardTotal(String titulo, JLabel valor) {
+        JPanel card = new JPanel(new BorderLayout());
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(220, 220, 220)),
+                BorderFactory.createEmptyBorder(10, 12, 10, 12)
+        ));
 
+        JLabel lblTitulo = new JLabel(titulo);
+        lblTitulo.setFont(lblTitulo.getFont().deriveFont(Font.BOLD, 12f));
 
+        valor.setFont(valor.getFont().deriveFont(Font.BOLD, 20f));
+        valor.setHorizontalAlignment(SwingConstants.RIGHT);
+
+        card.add(lblTitulo, BorderLayout.NORTH);
+        card.add(valor, BorderLayout.CENTER);
+        return card;
+    }
 }

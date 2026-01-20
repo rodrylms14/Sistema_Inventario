@@ -51,23 +51,32 @@ public class CierreCajaDAO {
         }
     }
 
-    public boolean guardarCierre(LocalDate fecha, ResumenCaja r, String observaciones) throws SQLException {
+    public boolean guardarCierre(
+            LocalDate fecha,
+            int idUsuario,
+            ResumenCaja r,
+            String observaciones
+    ) throws SQLException {
+
         String sql = """
-            INSERT INTO CierreCaja (fecha, cantidadVentas, subtotalVentas, totalCargoMesa, totalFinal, observaciones)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO CierreCaja
+            (fecha, idUsuario, cantidadVentas, subtotalVentas, totalCargoMesa, totalFinal, observaciones)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
         """;
 
         try (Connection con = ConexionBD.getConexion();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+            PreparedStatement ps = con.prepareStatement(sql)) {
 
-            ps.setDate(1, Date.valueOf(fecha));
-            ps.setInt(2, r.getCantidadVentas());
-            ps.setDouble(3, r.getSubtotalVentas());
-            ps.setDouble(4, r.getTotalCargoMesa());
-            ps.setDouble(5, r.getTotalFinal());
-            ps.setString(6, observaciones);
+            ps.setDate(1, Date.valueOf(fecha));      
+            ps.setInt(2, idUsuario);                 
+            ps.setInt(3, r.getCantidadVentas());
+            ps.setDouble(4, r.getSubtotalVentas());
+            ps.setDouble(5, r.getTotalCargoMesa());
+            ps.setDouble(6, r.getTotalFinal());
+            ps.setString(7, observaciones);
 
             return ps.executeUpdate() > 0;
         }
     }
+
 }
