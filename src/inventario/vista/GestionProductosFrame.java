@@ -17,7 +17,7 @@ public class GestionProductosFrame extends JFrame {
     private JButton btnCerrar;
 
     private ProductoDAO productoDAO = new ProductoDAO();
-    private VentanaVenta ventanaVenta; // para recargar productos en POS
+    private VentanaVenta ventanaVenta; 
 
     public GestionProductosFrame() {
 
@@ -93,7 +93,7 @@ public class GestionProductosFrame extends JFrame {
 
             Producto p = new Producto();
             p.setNombreProducto(nombre.trim());
-            p.setDetalleProducto(""); // opcional
+            p.setDetalleProducto(""); 
             p.setPrecioProducto(precio);
             p.setCantidadProducto(stock);
             p.setEstado(true);

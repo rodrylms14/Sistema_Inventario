@@ -10,10 +10,7 @@ import javax.swing.*;
 public class CierreCajaFrame extends JFrame {
 
     private final CierreCajaDAO dao = new CierreCajaDAO();
-
-    // 🔴 Guardamos el usuario que está haciendo el cierre
     private final int idUsuarioLogueado;
-
     private LocalDate fecha = LocalDate.now();
     private ResumenCaja resumen = new ResumenCaja(0, 0, 0, 0);
 
@@ -24,7 +21,6 @@ public class CierreCajaFrame extends JFrame {
     private JLabel lblTotal = new JLabel("0.00");
     private JTextField txtObs = new JTextField();
 
-    // ✅ Constructor correcto: recibe idUsuario
     public CierreCajaFrame(int idUsuarioLogueado) {
         this.idUsuarioLogueado = idUsuarioLogueado;
 
@@ -111,15 +107,14 @@ public class CierreCajaFrame extends JFrame {
     private void guardar() {
         try {
             if (dao.existeCierre(fecha)) {
-                JOptionPane.showMessageDialog(this, "⚠ Ya existe un cierre guardado para " + fecha);
+                JOptionPane.showMessageDialog(this, " Ya existe un cierre guardado para " + fecha);
                 return;
             }
 
-            // ✅ ahora sí pasamos el idUsuario correcto
             boolean ok = dao.guardarCierre(fecha, idUsuarioLogueado, resumen, txtObs.getText());
 
-            if (ok) JOptionPane.showMessageDialog(this, "✅ Cierre guardado.");
-            else JOptionPane.showMessageDialog(this, "❌ No se pudo guardar el cierre.");
+            if (ok) JOptionPane.showMessageDialog(this, " Cierre guardado.");
+            else JOptionPane.showMessageDialog(this, " No se pudo guardar el cierre.");
 
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(

@@ -6,7 +6,7 @@ import javax.swing.*;
 
 public class TicketPrinter {
 
-    // Muestra el ticket y permite imprimirlo (simple y efectivo)
+    // Muestra el ticket y permite imprimirlo 
     public static void previewAndPrint(String ticketText, String title) {
         JTextArea area = new JTextArea(ticketText);
         area.setFont(new Font("Monospaced", Font.PLAIN, 12));
@@ -25,7 +25,6 @@ public class TicketPrinter {
 
         if (option == JOptionPane.OK_OPTION) {
             try {
-                // Dialogo nativo de impresión
                 boolean ok = area.print();
                 if (!ok) {
                     JOptionPane.showMessageDialog(null, "Impresión cancelada.");

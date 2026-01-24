@@ -61,7 +61,7 @@ public class VentanaVenta extends JFrame {
 
     private void initComponents() {
 
-        // ROOT (evita que se pierda el panel inferior)
+        // ROOT 
         JPanel root = new JPanel(new BorderLayout(10, 10));
         root.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         setContentPane(root);
@@ -105,13 +105,13 @@ public class VentanaVenta extends JFrame {
         lblServicio = new JLabel("0.00");
         lblTotalPagar = new JLabel("0.00");
 
-        // ---------- Botones (usar el ATRIBUTO, no variable local) ----------
+        // ---------- Botones ----------
         btnAgregar = new JButton("Agregar");
         btnEliminar = new JButton("Eliminar");
         btnModificar = new JButton("Modificar");
         btnConfirmar = new JButton("Confirmar");
         btnCancelar = new JButton("Cancelar");
-        btnCierreCaja = new JButton("Cierre de caja"); // ✅ ahora sí es el atributo
+        btnCierreCaja = new JButton("Cierre de caja"); 
 
         btnAgregar.addActionListener(e -> agregarProductoCarrito());
         btnEliminar.addActionListener(e -> eliminarItem());
@@ -150,7 +150,6 @@ public class VentanaVenta extends JFrame {
 
         root.add(panelInferior, BorderLayout.SOUTH);
 
-        // UX: doble click para agregar
         tablaProductos.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent e) {
@@ -158,7 +157,6 @@ public class VentanaVenta extends JFrame {
             }
         });
 
-        // Debug opcional (puedes borrar)
         System.out.println("btnCierreCaja null? " + (btnCierreCaja == null));
     }
 
@@ -404,7 +402,7 @@ public class VentanaVenta extends JFrame {
             double subtotal = ventaConfirmada.getTotal() - ventaConfirmada.getImpServicio();
 
             String ticket = TicketBuilder.build(
-                    "Pollos Corraleros",
+                    "Pollos Corraleros", // nombre negocio
                     idVenta,
                     ventaConfirmada.getTipoServicio(),
                     subtotal,
@@ -417,7 +415,7 @@ public class VentanaVenta extends JFrame {
 
             JOptionPane.showMessageDialog(
                     this,
-                    "✅ Venta confirmada\n" +
+                    " Venta confirmada\n" +
                             "Tipo: " + ventaConfirmada.getTipoServicio() + "\n" +
                             "Cargo servicio: " + String.format("%.2f", ventaConfirmada.getImpServicio()) + "\n" +
                             "Total a pagar: " + String.format("%.2f", ventaConfirmada.getTotal())
@@ -427,7 +425,7 @@ public class VentanaVenta extends JFrame {
 
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this,
-                    "❌ No se pudo confirmar la venta:\n" + ex.getMessage(),
+                    " No se pudo confirmar la venta:\n" + ex.getMessage(),
                     "Error",
                     JOptionPane.ERROR_MESSAGE
             );
@@ -453,16 +451,15 @@ public class VentanaVenta extends JFrame {
         boolean ok = vdao.cancelarVenta(idVenta);
 
         if (ok) {
-            JOptionPane.showMessageDialog(this, "⚠ Venta cancelada y stock revertido.");
+            JOptionPane.showMessageDialog(this, " Venta cancelada y stock revertido.");
             reiniciarVenta();
         } else {
-            JOptionPane.showMessageDialog(this, "❌ No se pudo cancelar la venta.");
+            JOptionPane.showMessageDialog(this, " No se pudo cancelar la venta.");
         }
     }
 
     private void configurarPermisosPorRol() {
-        // Si quieres que cualquier usuario vea el botón, NO escondas nada aquí.
-        // Si luego quieres restricciones, se agregan aquí.
+
     }
 
     private void crearMenuAdmin() {

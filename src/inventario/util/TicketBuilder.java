@@ -6,7 +6,6 @@ import java.util.List;
 
 public class TicketBuilder {
 
-    // Un “item” simple para imprimir (puedes adaptarlo a tu modelo real)
     public static class Item {
         public final String nombre;
         public final int cantidad;

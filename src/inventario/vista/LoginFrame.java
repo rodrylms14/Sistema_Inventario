@@ -2,9 +2,8 @@ package inventario.vista;
 
 import inventario.dao.UsuarioDAO;
 import inventario.modelo.Usuario;
-
-import javax.swing.*;
 import java.awt.*;
+import javax.swing.*;
 
 public class LoginFrame extends JFrame {
 
@@ -73,8 +72,7 @@ public class LoginFrame extends JFrame {
 
         JOptionPane.showMessageDialog(this, "Bienvenido, " + u.getNombreCompleto() + "!");
 
-        this.dispose(); // cerrar login
-
+        this.dispose(); 
         if (u.getRol().equalsIgnoreCase("ADMIN")) {
             PanelAdmin pa = new PanelAdmin(u);
             pa.setVisible(true);

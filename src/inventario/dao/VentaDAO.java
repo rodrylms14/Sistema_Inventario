@@ -30,13 +30,12 @@ public class VentaDAO {
             }
 
             ps.setInt(2, v.getIdUsuario());
-            ps.setString(3, v.getTipoServicio()); // BARRA o SALON
-
+            ps.setString(3, v.getTipoServicio()); 
             ps.executeUpdate();
 
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
-                    return rs.getInt(1); // idVenta generado
+                    return rs.getInt(1);
                 }
             }
 
@@ -114,8 +113,6 @@ public class VentaDAO {
         }
     }
 
-
-
     public boolean eliminarDetalle(int idDetalle) {
         String sqlSel = "SELECT idVenta, idProducto, cantidad FROM DetalleVenta WHERE idDetalle=? FOR UPDATE";
         String sqlDel = "DELETE FROM DetalleVenta WHERE idDetalle=?";
@@ -128,7 +125,7 @@ public class VentaDAO {
 
             int idVenta, idProducto, cantidad;
 
-            // 1) Leer el detalle (bloqueado)
+            // 1) Leer el detalle 
             try (PreparedStatement ps = con.prepareStatement(sqlSel)) {
                 ps.setInt(1, idDetalle);
                 try (ResultSet rs = ps.executeQuery()) {
@@ -177,10 +174,6 @@ public class VentaDAO {
             try { if (con != null) con.close(); } catch (SQLException ignore) {}
         }
     }
-
-
-
-
 
     public Venta obtenerVenta(int idVenta) {
         String sql = "SELECT * FROM Venta WHERE idVenta=?";
@@ -257,7 +250,7 @@ public class VentaDAO {
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
                     con.rollback();
-                    return false; // venta no existe
+                    return false; 
                 }
                 estado = rs.getString(1);
             }
@@ -293,7 +286,7 @@ public class VentaDAO {
             ps.executeUpdate();
         }
 
-        // 3) Marcar ANULADA (solo si estaba ABIERTA)
+        // 3) Marcar ANULADA 
         int filas;
         try (PreparedStatement ps = con.prepareStatement(sqlMarcarAnulada)) {
             ps.setInt(1, idVenta);
@@ -320,102 +313,101 @@ public class VentaDAO {
                 con.close();
             }
         } catch (SQLException ignore) {}
+        }
     }
-}
 
 
 
 
-public boolean actualizarCantidadDetalle(int idDetalle, int nuevaCantidad) {
-    if (nuevaCantidad <= 0) return false;
+    public boolean actualizarCantidadDetalle(int idDetalle, int nuevaCantidad) {
+        if (nuevaCantidad <= 0) return false;
 
-    String sqlSel = """
-        SELECT d.idVenta, d.idProducto, d.cantidad, d.precioUnitario, p.cantidadProducto
-        FROM DetalleVenta d
-        JOIN Producto p ON p.idProducto = d.idProducto
-        WHERE d.idDetalle = ?
-        FOR UPDATE
-    """;
+        String sqlSel = """
+            SELECT d.idVenta, d.idProducto, d.cantidad, d.precioUnitario, p.cantidadProducto
+            FROM DetalleVenta d
+            JOIN Producto p ON p.idProducto = d.idProducto
+            WHERE d.idDetalle = ?
+            FOR UPDATE
+        """;
 
-    String sqlUpdDet = "UPDATE DetalleVenta SET cantidad=?, subtotal=? WHERE idDetalle=?";
-    String sqlDesc = "UPDATE Producto SET cantidadProducto = cantidadProducto - ? WHERE idProducto=?";
-    String sqlDev  = "UPDATE Producto SET cantidadProducto = cantidadProducto + ? WHERE idProducto=?";
+        String sqlUpdDet = "UPDATE DetalleVenta SET cantidad=?, subtotal=? WHERE idDetalle=?";
+        String sqlDesc = "UPDATE Producto SET cantidadProducto = cantidadProducto - ? WHERE idProducto=?";
+        String sqlDev  = "UPDATE Producto SET cantidadProducto = cantidadProducto + ? WHERE idProducto=?";
 
-    Connection con = null;
-    try {
-        con = ConexionBD.getConexion();
-        con.setAutoCommit(false);
+        Connection con = null;
+        try {
+            con = ConexionBD.getConexion();
+            con.setAutoCommit(false);
 
-        int idVenta, idProducto, cantActual, stock;
-        double precio;
+            int idVenta, idProducto, cantActual, stock;
+            double precio;
 
-        try (PreparedStatement ps = con.prepareStatement(sqlSel)) {
-            ps.setInt(1, idDetalle);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    con.rollback();
-                    return false;
+            try (PreparedStatement ps = con.prepareStatement(sqlSel)) {
+                ps.setInt(1, idDetalle);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        con.rollback();
+                        return false;
+                    }
+                    idVenta = rs.getInt("idVenta");
+                    idProducto = rs.getInt("idProducto");
+                    cantActual = rs.getInt("cantidad");
+                    precio = rs.getDouble("precioUnitario");
+                    stock = rs.getInt("cantidadProducto");
                 }
-                idVenta = rs.getInt("idVenta");
-                idProducto = rs.getInt("idProducto");
-                cantActual = rs.getInt("cantidad");
-                precio = rs.getDouble("precioUnitario");
-                stock = rs.getInt("cantidadProducto");
             }
-        }
 
-        int delta = nuevaCantidad - cantActual;
+            int delta = nuevaCantidad - cantActual;
 
-        // Si no cambió la cantidad, no hacemos nada
-        if (delta == 0) {
-            con.rollback(); // o con.commit(); (no hay cambios). Rollback ahorra trabajo.
+            if (delta == 0) {
+                con.rollback(); 
+                return true;
+            }
+
+            if (delta > 0) {
+                if (stock < delta) throw new SQLException("Stock insuficiente para aumentar cantidad.");
+                try (PreparedStatement ps = con.prepareStatement(sqlDesc)) {
+                    ps.setInt(1, delta);
+                    ps.setInt(2, idProducto);
+                    ps.executeUpdate();
+                }
+            } else { 
+                try (PreparedStatement ps = con.prepareStatement(sqlDev)) {
+                    ps.setInt(1, -delta);
+                    ps.setInt(2, idProducto);
+                    ps.executeUpdate();
+                }
+            }
+
+            double nuevoSubtotal = precio * nuevaCantidad;
+            int filas;
+            try (PreparedStatement ps = con.prepareStatement(sqlUpdDet)) {
+                ps.setInt(1, nuevaCantidad);
+                ps.setDouble(2, nuevoSubtotal);
+                ps.setInt(3, idDetalle);
+                filas = ps.executeUpdate();
+            }
+
+            if (filas == 0) {
+                con.rollback();
+                return false;
+            }
+
+            recalcularTotales(con, idVenta);
+
+            con.commit();
             return true;
-        }
 
-        if (delta > 0) {
-            if (stock < delta) throw new SQLException("Stock insuficiente para aumentar cantidad.");
-            try (PreparedStatement ps = con.prepareStatement(sqlDesc)) {
-                ps.setInt(1, delta);
-                ps.setInt(2, idProducto);
-                ps.executeUpdate();
-            }
-        } else { // delta < 0
-            try (PreparedStatement ps = con.prepareStatement(sqlDev)) {
-                ps.setInt(1, -delta);
-                ps.setInt(2, idProducto);
-                ps.executeUpdate();
-            }
-        }
-
-        double nuevoSubtotal = precio * nuevaCantidad;
-        int filas;
-        try (PreparedStatement ps = con.prepareStatement(sqlUpdDet)) {
-            ps.setInt(1, nuevaCantidad);
-            ps.setDouble(2, nuevoSubtotal);
-            ps.setInt(3, idDetalle);
-            filas = ps.executeUpdate();
-        }
-
-        if (filas == 0) {
-            con.rollback();
+        } catch (Exception e) {
+            try { if (con != null) con.rollback(); } catch (SQLException ignore) {}
+            e.printStackTrace();
             return false;
+
+        } finally {
+            try { if (con != null) con.setAutoCommit(true); } catch (SQLException ignore) {}
+            try { if (con != null) con.close(); } catch (SQLException ignore) {}
         }
-
-        recalcularTotales(con, idVenta);
-
-        con.commit();
-        return true;
-
-    } catch (Exception e) {
-        try { if (con != null) con.rollback(); } catch (SQLException ignore) {}
-        e.printStackTrace();
-        return false;
-
-    } finally {
-        try { if (con != null) con.setAutoCommit(true); } catch (SQLException ignore) {}
-        try { if (con != null) con.close(); } catch (SQLException ignore) {}
     }
-}
 
 
 
@@ -530,7 +522,7 @@ public boolean actualizarCantidadDetalle(int idDetalle, int nuevaCantidad) {
             con = ConexionBD.getConexion();
             con.setAutoCommit(false);
 
-            // (Opcional pero PRO) bloquear la venta durante confirmación
+            // bloquear la venta durante confirmación
             try (PreparedStatement ps = con.prepareStatement("SELECT idVenta FROM Venta WHERE idVenta = ? FOR UPDATE")) {
                 ps.setInt(1, idVenta);
                 ps.executeQuery();

@@ -8,14 +8,13 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.List;
-import javax.swing.*; // <-- Necesario para el modelo de JSpinner
-import javax.swing.JSpinner.DateEditor; // <-- Necesario para convertir Date a LocalDate
-import javax.swing.table.DefaultTableModel; // <-- Necesario para dar formato al JSpinner
+import javax.swing.*;
+import javax.swing.JSpinner.DateEditor; 
+import javax.swing.table.DefaultTableModel; 
 
 
 public class ReporteVentasRangoFrame extends JFrame {
 
-    // CAMBIADAS: De JTextField a JSpinner
     private JSpinner spDesde;
     private JSpinner spHasta;
     
@@ -26,8 +25,7 @@ public class ReporteVentasRangoFrame extends JFrame {
 
     private VentaDAO ventaDAO = new VentaDAO();
     private DateTimeFormatter fmtTabla = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    // fmtEntrada ya no es estrictamente necesario, pero se mantiene si se necesita.
-    // private DateTimeFormatter fmtEntrada = DateTimeFormatter.ofPattern("yyyy-MM-dd"); 
+
 
     public ReporteVentasRangoFrame() {
         setTitle("Reporte de ventas por rango de fechas");
@@ -97,18 +95,10 @@ public class ReporteVentasRangoFrame extends JFrame {
     }
 
     private void buscar() {
-        // 1. Obtener la fecha de tipo java.util.Date directamente del JSpinner
         Date dateDesde = (Date) spDesde.getValue();
         Date dateHasta = (Date) spHasta.getValue();
-
-        // 2. Validación (el JSpinner siempre tiene un valor Date, así que la validación es opcional)
-        // Aunque la validación de nulos no es necesaria, mantenemos la lógica de conversión:
-        
-        // 3. Convertir java.util.Date a java.time.LocalDate para la lógica de negocios
         LocalDate desde = dateDesde.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         LocalDate hasta = dateHasta.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-
-        // Eliminamos el bloque try-catch de parseo de String, ya que la fecha siempre es válida.
 
         if (hasta.isBefore(desde)) {
             JOptionPane.showMessageDialog(this, "La fecha 'hasta' no puede ser menor que 'desde'.");
